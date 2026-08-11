@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import 'fake-indexeddb/auto';
 import { JOB_DRAFT_EXTRACTOR_BRIDGE_KEY } from './extraction/jobDraftExtractorBridge';
 import type { ExtensionMessage, ExtensionResponse } from './messages';
 import { emptyFormValues } from './popupForm';
@@ -22,10 +23,6 @@ const browserMock = vi.hoisted(() => ({
   scripting: {
     executeScript: vi.fn(),
   },
-  identity: {
-    getRedirectURL: vi.fn(),
-    launchWebAuthFlow: vi.fn(),
-  },
   storage: {
     local: {
       get: vi.fn(),
@@ -47,7 +44,6 @@ describe('background save flow', () => {
     vi.stubGlobal('defineBackground', (setup: () => void) => {
       setup();
     });
-    vi.stubGlobal('fetch', vi.fn());
     browserMock.storage.local.get.mockResolvedValue({});
     browserMock.storage.local.set.mockResolvedValue(undefined);
     browserMock.storage.local.remove.mockResolvedValue(undefined);
@@ -59,7 +55,7 @@ describe('background save flow', () => {
     );
   });
 
-  it('surfaces the Authentik sign-in prompt when saving before sign-in', async () => {
+  it('saves a job locally without any network round trip', async () => {
     const { handleMessage } = await import('../../entrypoints/background');
 
     const response = await handleMessage({
@@ -74,85 +70,21 @@ describe('background save flow', () => {
     });
 
     expect(response).toMatchObject({
-      type: 'ERROR',
-      ok: false,
-      error: {
-        code: 'OAUTH_FAILED',
-        message: 'Sign in with Authentik before saving jobs.',
-      },
-    });
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it('reports an unauthenticated status before sign-in', async () => {
-    const { handleMessage } = await import('../../entrypoints/background');
-
-    await expect(handleMessage({ type: 'GET_AUTH_STATUS' })).resolves.toEqual({
-      type: 'GET_AUTH_STATUS_RESULT',
+      type: 'SAVE_JOB_RESULT',
       ok: true,
-      authenticated: false,
-    });
-  });
-
-  it('reports an authenticated status for a current access token', async () => {
-    browserMock.storage.local.get.mockResolvedValue({
-      'jobTracker.settings': {
-        oauthAccessToken: 'current-token',
-        oauthExpiresAt: Date.now() + 300_000,
-      },
-    });
-    const { handleMessage } = await import('../../entrypoints/background');
-
-    await expect(handleMessage({ type: 'GET_AUTH_STATUS' })).resolves.toEqual({
-      type: 'GET_AUTH_STATUS_RESULT',
-      ok: true,
-      authenticated: true,
-    });
-  });
-
-  it('signs out by clearing stored OAuth credentials', async () => {
-    browserMock.storage.local.get.mockResolvedValue({
-      'jobTracker.settings': {
-        oauthAccessToken: 'current-token',
-        oauthRefreshToken: 'refresh-token',
-        oauthExpiresAt: Date.now() + 300_000,
-      },
-    });
-    const { handleMessage } = await import('../../entrypoints/background');
-
-    await expect(handleMessage({ type: 'OAUTH_SIGN_OUT' })).resolves.toEqual({
-      type: 'OAUTH_SIGN_OUT_RESULT',
-      ok: true,
-    });
-    expect(browserMock.storage.local.set).toHaveBeenCalled();
-    const stored: unknown = browserMock.storage.local.set.mock.calls[0]?.[0];
-    expect(stored).toMatchObject({
-      'jobTracker.settings': {
-        oauthAccessToken: '',
-        oauthRefreshToken: '',
-        oauthExpiresAt: 0,
-      },
+      result: { action: 'created' },
     });
   });
 
   it('returns only non-sensitive settings to extension pages', async () => {
-    browserMock.storage.local.get.mockResolvedValue({
-      'jobTracker.settings': {
-        oauthAccessToken: 'current-token',
-        oauthRefreshToken: 'refresh-token',
-        oauthExpiresAt: Date.now() + 300_000,
-      },
-    });
     const { handleMessage } = await import('../../entrypoints/background');
 
     const response = await handleMessage({ type: 'GET_SETTINGS' });
     expect(response).toEqual({
       type: 'GET_SETTINGS_RESULT',
       ok: true,
-      settings: { apiBaseUrl: 'http://jobtracker.local', autoDetect: true },
+      settings: { autoDetect: true },
     });
-    expect(response).not.toHaveProperty('settings.oauthAccessToken');
-    expect(response).not.toHaveProperty('settings.oauthRefreshToken');
   });
 
   it('detects the platform from the active tab URL and passes it to extraction', async () => {
@@ -357,33 +289,6 @@ describe('background save flow', () => {
       ok: false,
       error: { code: 'EXTRACT_FAILED' },
     });
-  });
-
-  it('checks the authenticated API health endpoint', async () => {
-    browserMock.storage.local.get.mockResolvedValue({
-      'jobTracker.settings': {
-        apiBaseUrl: 'http://jobtracker.local',
-        authentikBaseUrl: 'https://auth.yjimmy.dev',
-        oauthClientId: 'job-tracker-extension',
-        oauthScope: 'openid profile email',
-        oauthAccessToken: 'oauth-token',
-        oauthRefreshToken: '',
-        oauthExpiresAt: Date.now() + 300_000,
-        autoDetect: false,
-      },
-    });
-    vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 }),
-    );
-    const { handleMessage } = await import('../../entrypoints/background');
-
-    const response = await handleMessage({ type: 'TEST_CONNECTION' });
-
-    expect(response).toEqual({ type: 'TEST_CONNECTION_RESULT', ok: true });
-    expect(fetch).toHaveBeenCalledWith(
-      'http://jobtracker.local/api/health/auth',
-      expect.objectContaining({ method: 'GET' }),
-    );
   });
 
   it('serializes popup draft writes in the background worker', async () => {

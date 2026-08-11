@@ -6,22 +6,13 @@ import {
   type ExtractionCandidate,
   extensionMessageSchema,
 } from '../src/lib/messages';
-import {
-  ApiClientError,
-  postScrapePayload,
-  testAuthConnection,
-} from '../src/lib/apiClient';
+import { upsertJob } from '../src/lib/db/jobsRepo';
 import {
   detectPlatform,
   isAutoScrapeUrl,
 } from '../src/lib/extraction/detectPlatform';
 import type { extractJobDraft } from '../src/lib/extraction/jobDraftExtractor';
 import { JOB_DRAFT_EXTRACTOR_BRIDGE_KEY } from '../src/lib/extraction/jobDraftExtractorBridge';
-import {
-  getValidAccessToken,
-  OAuthRequestError,
-  signInWithAuthentik,
-} from '../src/lib/oauth';
 import { buildScrapePayload } from '../src/lib/payload';
 import {
   clearPopupDraft,
@@ -33,7 +24,6 @@ import {
 import type { PopupFormValues } from '../src/lib/popupForm';
 import { type JobDraft, jobDraftSchema } from '../src/lib/schemas';
 import {
-  clearOAuthCredentials,
   getSettings,
   saveSettings,
   toPublicSettings,
@@ -105,48 +95,6 @@ export async function handleMessage(
       ok: true,
       settings: toPublicSettings(settings),
     };
-  }
-
-  if (message.type === 'OAUTH_SIGN_IN') {
-    try {
-      await signInWithAuthentik(await getSettings());
-      return { type: 'OAUTH_SIGN_IN_RESULT', ok: true };
-    } catch (error) {
-      if (error instanceof OAuthRequestError && error.retryable) {
-        return errorResponse('OAUTH_TIMEOUT', error.message);
-      }
-      return errorResponse(
-        'OAUTH_FAILED',
-        'Authentik sign-in failed.',
-        error instanceof Error ? error.message : undefined,
-      );
-    }
-  }
-
-  if (message.type === 'OAUTH_SIGN_OUT') {
-    await clearOAuthCredentials();
-    return { type: 'OAUTH_SIGN_OUT_RESULT', ok: true };
-  }
-
-  if (message.type === 'GET_AUTH_STATUS') {
-    try {
-      await getValidAccessToken(await getSettings());
-      return {
-        type: 'GET_AUTH_STATUS_RESULT',
-        ok: true,
-        authenticated: true,
-      };
-    } catch {
-      return {
-        type: 'GET_AUTH_STATUS_RESULT',
-        ok: true,
-        authenticated: false,
-      };
-    }
-  }
-
-  if (message.type === 'TEST_CONNECTION') {
-    return testConnection();
   }
 
   if (message.type === 'GET_POPUP_DRAFT') {
@@ -441,30 +389,9 @@ async function saveJob(draft: JobDraft): Promise<ExtensionResponse> {
   saveJobInFlight = true;
   try {
     const payload = buildScrapePayload(draft);
-    const settings = await getSettings();
-    const accessToken = await getValidAccessToken(settings);
-    const result = await postScrapePayload(
-      { ...settings, oauthAccessToken: accessToken },
-      payload,
-    );
+    const result = await upsertJob(payload);
     return { type: 'SAVE_JOB_RESULT', ok: true, payload, result };
   } catch (error) {
-    if (error instanceof ApiClientError) {
-      return errorResponse(error.code, error.message, error.details);
-    }
-
-    if (error instanceof OAuthRequestError && error.retryable) {
-      return errorResponse('OAUTH_TIMEOUT', error.message);
-    }
-
-    if (error instanceof Error && error.message.includes('Authentik')) {
-      return errorResponse('OAUTH_FAILED', error.message);
-    }
-
-    if (error instanceof Error && error.message.includes('Sign in')) {
-      return errorResponse('OAUTH_FAILED', error.message);
-    }
-
     return errorResponse(
       'PAYLOAD_INVALID',
       'Review the required fields before saving this job.',
@@ -472,33 +399,6 @@ async function saveJob(draft: JobDraft): Promise<ExtensionResponse> {
     );
   } finally {
     saveJobInFlight = false;
-  }
-}
-
-async function testConnection(): Promise<ExtensionResponse> {
-  try {
-    const settings = await getSettings();
-    const accessToken = await getValidAccessToken(settings);
-    await testAuthConnection({ ...settings, oauthAccessToken: accessToken });
-    return { type: 'TEST_CONNECTION_RESULT', ok: true };
-  } catch (error) {
-    if (error instanceof ApiClientError) {
-      return errorResponse(error.code, error.message, error.details);
-    }
-
-    if (error instanceof OAuthRequestError && error.retryable) {
-      return errorResponse('OAUTH_TIMEOUT', error.message);
-    }
-
-    if (error instanceof Error && error.message.includes('Sign in')) {
-      return errorResponse('OAUTH_FAILED', error.message);
-    }
-
-    return errorResponse(
-      'API_UNEXPECTED_RESPONSE',
-      'Could not verify the Job Tracker API connection.',
-      error instanceof Error ? error.message : undefined,
-    );
   }
 }
 
