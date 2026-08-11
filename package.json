@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Chrome extension for saving visible job postings into the Job Tracker API.",
+  "description": "Chrome extension: a standalone, local-only job tracker with no login and no server.",
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
@@ -20,6 +20,8 @@
   "dependencies": {
     "dexie": "^4.0.11",
     "dompurify": "3.4.12",
+    "htm": "^3.1.1",
+    "preact": "^10.24.3",
     "turndown": "7.2.4",
     "zod": "^3.25.76"
   },

@@ -157,17 +157,7 @@ export async function listJobs(
 
 export async function updateJob(
   id: number,
-  patch: Partial<
-    Pick<
-      StoredJob,
-      | 'interview_stage'
-      | 'priority'
-      | 'notes'
-      | 'resume_version'
-      | 'job_title'
-      | 'company_name'
-    >
-  >,
+  patch: Partial<Omit<StoredJob, 'id' | 'created_at' | 'updated_at'>>,
 ): Promise<StoredJob> {
   const db = getDb();
   return db.transaction('rw', db.jobs, async () => {

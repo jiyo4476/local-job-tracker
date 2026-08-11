@@ -1,0 +1,118 @@
+body {
+  min-width: 100%;
+}
+
+.app-shell {
+  display: grid;
+  gap: 18px;
+  margin: 0 auto;
+  max-width: 960px;
+  padding: 20px;
+}
+
+.app-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.app-nav {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.app-nav a {
+  border-radius: 6px;
+  padding: 6px 10px;
+  text-decoration: none;
+}
+
+.app-nav a.active {
+  background: color-mix(in srgb, Highlight 14%, Canvas);
+  font-weight: 600;
+}
+
+.button-link {
+  background: color-mix(in srgb, Highlight 14%, Canvas);
+  border: 1px solid color-mix(in srgb, Highlight 38%, Canvas);
+}
+
+.app-main {
+  display: grid;
+  gap: 16px;
+}
+
+.filters-row {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.filters-row label {
+  min-width: 140px;
+}
+
+.data-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 14%, Canvas);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.data-table tbody tr:hover {
+  background: color-mix(in srgb, Highlight 6%, Canvas);
+}
+
+.muted {
+  color: color-mix(in srgb, CanvasText 60%, Canvas);
+  font-weight: 400;
+}
+
+.inactive-banner {
+  background: color-mix(in srgb, Mark 10%, Canvas);
+  border: 1px solid color-mix(in srgb, Mark 35%, Canvas);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.job-meta {
+  display: grid;
+  gap: 4px 12px;
+  grid-template-columns: max-content 1fr;
+}
+
+.job-meta dt {
+  color: color-mix(in srgb, CanvasText 60%, Canvas);
+}
+
+.job-meta dd {
+  margin: 0;
+}
+
+.job-description {
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+.actions-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.actions-cell a,
+.actions-cell button {
+  font-size: 12px;
+  min-height: 28px;
+  padding: 0 8px;
+}
