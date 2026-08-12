@@ -1,18 +1,24 @@
 import { useEffect, useState } from 'preact/hooks';
 
 export type Route =
+  | { name: 'dashboard' }
+  | { name: 'analytics' }
   | { name: 'jobs'; query?: string }
   | { name: 'job-new' }
   | { name: 'job-detail'; id: number }
   | { name: 'job-edit'; id: number }
   | { name: 'companies' };
 
-const DEFAULT_ROUTE: Route = { name: 'jobs' };
+const DEFAULT_ROUTE: Route = { name: 'dashboard' };
 
 export function parseHash(hash: string): Route {
   const [pathPart, queryPart] = hash.replace(/^#\/?/, '').split('?');
   const segments = (pathPart ?? '').split('/').filter(Boolean);
   const params = new URLSearchParams(queryPart ?? '');
+
+  if (segments[0] === 'analytics') {
+    return { name: 'analytics' };
+  }
 
   if (segments[0] === 'companies') {
     return { name: 'companies' };
