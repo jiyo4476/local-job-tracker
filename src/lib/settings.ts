@@ -1,5 +1,5 @@
-import { browser } from 'wxt/browser';
 import { z } from 'zod';
+import { getDb } from './db/schema';
 
 export const extensionSettingsSchema = z.object({
   autoDetect: z.boolean().default(true),
@@ -20,12 +20,11 @@ export type ExtensionSettingsUpdate = z.infer<
 export type PublicSettings = z.infer<typeof publicSettingsSchema>;
 export type PublicSettingsUpdate = z.infer<typeof publicSettingsUpdateSchema>;
 
-const STORAGE_KEY = 'jobTracker.settings';
 let settingsMutationQueue: Promise<void> = Promise.resolve();
 
 export async function getSettings(): Promise<ExtensionSettings> {
-  const result = await browser.storage.local.get(STORAGE_KEY);
-  return extensionSettingsSchema.parse(result[STORAGE_KEY] ?? {});
+  const stored = await getDb().settings.get('extension');
+  return extensionSettingsSchema.parse(stored ?? {});
 }
 
 export async function saveSettings(
@@ -37,7 +36,7 @@ export async function saveSettings(
     .then(async () => {
       const current = await getSettings();
       result = extensionSettingsSchema.parse({ ...current, ...settings });
-      await browser.storage.local.set({ [STORAGE_KEY]: result });
+      await getDb().settings.put({ key: 'extension', ...result });
     });
   settingsMutationQueue = operation.catch(() => undefined);
   await operation;

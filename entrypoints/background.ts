@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser';
+import { ZodError } from 'zod';
 import {
   type ExtensionErrorCode,
   type ExtensionMessage,
@@ -29,7 +30,7 @@ import {
   toPublicSettings,
 } from '../src/lib/settings';
 
-let saveJobInFlight = false;
+let saveJobQueue: Promise<void> = Promise.resolve();
 let popupDraftMutationQueue: Promise<void> = Promise.resolve();
 const popupDraftNavigationGenerations = new Map<number, number>();
 const popupDraftContexts = new Map<
@@ -75,8 +76,8 @@ export async function handleMessage(
     return extractActiveTab();
   }
 
-  if (message.type === 'SAVE_JOB') {
-    return saveJob(message.draft);
+  if (message.type === 'SAVE_JOB_LOCAL') {
+    return enqueueSaveJob(message.draft);
   }
 
   if (message.type === 'GET_SETTINGS') {
@@ -381,24 +382,38 @@ function safeParseDraftWithFallback(raw: unknown) {
   return jobDraftSchema.safeParse(cleaned);
 }
 
-async function saveJob(draft: JobDraft): Promise<ExtensionResponse> {
-  if (saveJobInFlight) {
-    return errorResponse('SAVE_IN_PROGRESS', 'A save is already in progress.');
-  }
+function enqueueSaveJob(draft: JobDraft): Promise<ExtensionResponse> {
+  let response: ExtensionResponse | undefined;
+  const operation = saveJobQueue
+    .catch(() => undefined)
+    .then(async () => {
+      response = await saveJob(draft);
+    });
+  saveJobQueue = operation;
+  return operation.then(() => {
+    if (!response) throw new Error('Save queue did not produce a response.');
+    return response;
+  });
+}
 
-  saveJobInFlight = true;
+async function saveJob(draft: JobDraft): Promise<ExtensionResponse> {
   try {
     const payload = buildScrapePayload(draft);
     const result = await upsertJob(payload);
-    return { type: 'SAVE_JOB_RESULT', ok: true, payload, result };
+    return { type: 'SAVE_JOB_LOCAL_RESULT', ok: true, payload, result };
   } catch (error) {
+    if (error instanceof ZodError) {
+      return errorResponse(
+        'PAYLOAD_INVALID',
+        'Review the required fields before saving this job.',
+        error.message,
+      );
+    }
     return errorResponse(
-      'PAYLOAD_INVALID',
-      'Review the required fields before saving this job.',
+      'STORAGE_FAILED',
+      'Could not store this job locally. Your draft has been kept so you can retry.',
       error instanceof Error ? error.message : undefined,
     );
-  } finally {
-    saveJobInFlight = false;
   }
 }
 

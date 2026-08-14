@@ -1,7 +1,7 @@
 import type { StoredJob } from '../db/schema';
 import { apiSourcePlatformSchema } from '../schemas';
 import type { TaxonomyField } from '../taxonomyFields';
-import { buildWeeklyTrend, startOfWeekIso } from './dashboard';
+import { buildWeeklyTrend } from './dashboard';
 
 const DEFAULT_WEEKS = 12;
 const HOURS_PER_YEAR = 2080;
@@ -104,7 +104,14 @@ export function salarySummaryByJobTypeAndExperience(
       experience_level: experienceLevel,
       count: sorted.length,
       minCents: sorted[0] ?? 0,
-      medianCents: sorted[Math.floor(sorted.length / 2)] ?? 0,
+      medianCents:
+        sorted.length % 2 === 0
+          ? Math.round(
+              ((sorted[sorted.length / 2 - 1] ?? 0) +
+                (sorted[sorted.length / 2] ?? 0)) /
+                2,
+            )
+          : (sorted[Math.floor(sorted.length / 2)] ?? 0),
       maxCents: sorted[sorted.length - 1] ?? 0,
     });
   }
@@ -158,36 +165,35 @@ export function skillsByClearance(
 }
 
 export interface SkillDemandSeries {
-  weeks: string[];
+  periods: string[];
   series: { skill: string; counts: number[] }[];
 }
 
-/** Weekly mention counts for the top `topN` skills over the trailing `weeks` weeks. */
+/** Monthly mentions for the top skills. `created_at` is the local-capture fallback when date_posted is absent. */
 export function skillDemandOverTime(
   jobs: readonly StoredJob[],
   now: Date = new Date(),
-  weeks: number = DEFAULT_WEEKS,
-  topN = 6,
+  months = 12,
+  topN = 15,
 ): SkillDemandSeries {
   const topSkills = taxonomyTopN(jobs, 'skills', topN).map((s) => s.name);
-  const weekStarts = buildWeeklyTrend(jobs, now, weeks).map((b) => b.weekStart);
-
-  const jobWeek = new Map<StoredJob, string>();
-  for (const job of jobs) {
-    jobWeek.set(job, startOfWeekIso(new Date(job.created_at)));
+  const periods: string[] = [];
+  for (let offset = months - 1; offset >= 0; offset -= 1) {
+    const date = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 1),
+    );
+    periods.push(date.toISOString().slice(0, 7));
   }
-
   const series = topSkills.map((skill) => {
-    const counts = weekStarts.map(
-      (weekStart) =>
+    const counts = periods.map(
+      (period) =>
         jobs.filter(
           (job) =>
             (job.skills ?? []).includes(skill) &&
-            jobWeek.get(job) === weekStart,
+            (job.date_posted ?? job.created_at).slice(0, 7) === period,
         ).length,
     );
     return { skill, counts };
   });
-
-  return { weeks: weekStarts, series };
+  return { periods, series };
 }

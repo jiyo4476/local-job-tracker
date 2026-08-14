@@ -1,17 +1,22 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { resetDbForTests } from './schema';
+import { getDb, resetDbForTests } from './schema';
 import {
+  addJobContact,
   exportAllJobs,
   getJob,
   importJobs,
+  importLocalDataset,
   listJobs,
+  removeJobContact,
   softDeleteJob,
   updateJob,
+  updateJobContact,
   upsertJob,
 } from './jobsRepo';
 import type { NewJobInput } from './schema';
+import { getSettings, saveSettings } from '../settings';
 
 function baseInput(overrides: Partial<NewJobInput> = {}): NewJobInput {
   return {
@@ -67,6 +72,57 @@ describe('upsertJob', () => {
     const stored = await getJob(first.id);
     expect(stored?.interview_stage).toBe('phone_screen');
     expect(stored?.notes).toBe('Recruiter call scheduled.');
+  });
+
+  it('preserves local contacts across an exact capture update', async () => {
+    const first = await upsertJob(baseInput());
+    await updateJob(first.id, {
+      contacts: [
+        {
+          id: '123e4567-e89b-42d3-a456-426614174000',
+          name: 'Ada Recruiter',
+          email: 'ada@example.com',
+          created_at: '2026-08-14T12:00:00.000Z',
+        },
+      ],
+    });
+
+    await upsertJob(baseInput({ job_title: 'Updated title' }));
+
+    expect((await getJob(first.id))?.contacts).toEqual([
+      expect.objectContaining({ name: 'Ada Recruiter' }),
+    ]);
+  });
+
+  it('provides stable contact create, update, and remove helpers', async () => {
+    const job = await upsertJob(baseInput());
+    const contact = await addJobContact(job.id, {
+      name: 'Ada Recruiter',
+      linkedin_url: 'https://www.linkedin.com/in/ada',
+    });
+    expect(contact.id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(contact.created_at).toBeTruthy();
+
+    const updated = await updateJobContact(job.id, contact.id, {
+      title: 'Senior Recruiter',
+    });
+    expect(updated.title).toBe('Senior Recruiter');
+
+    await removeJobContact(job.id, contact.id);
+    expect((await getJob(job.id))?.contacts).toEqual([]);
+  });
+
+  it('preserves both contacts added concurrently', async () => {
+    const job = await upsertJob(baseInput());
+
+    await Promise.all([
+      addJobContact(job.id, { name: 'Ada Recruiter' }),
+      addJobContact(job.id, { name: 'Grace Hiring Manager' }),
+    ]);
+
+    expect(
+      (await getJob(job.id))?.contacts.map(({ name }) => name).sort(),
+    ).toEqual(['Ada Recruiter', 'Grace Hiring Manager']);
   });
 
   it('skips as duplicate on fuzzy (company, title) match within 7 days', async () => {
@@ -170,5 +226,86 @@ describe('export/import', () => {
     const { imported, skipped } = await importJobs(exported);
     expect(imported).toBe(0);
     expect(skipped).toBe(1);
+  });
+
+  it('applies normalized cross-platform fuzzy dedup during merge', async () => {
+    await upsertJob(baseInput());
+    const [existing] = await exportAllJobs();
+    expect(existing).toBeDefined();
+    if (!existing) throw new Error('Expected seeded job.');
+    const candidate = {
+      ...existing,
+      id: 99,
+      source_platform: 'linkedin' as const,
+      external_job_id: 'linkedin-copy',
+      company_name: ' example analytics ',
+      job_title: 'SENIOR SOFTWARE ENGINEER',
+    };
+
+    expect(await importJobs([candidate])).toEqual({ imported: 0, skipped: 1 });
+    expect(await listJobs()).toHaveLength(1);
+  });
+
+  it('losslessly replaces distinct backup identities that share company and title', async () => {
+    await upsertJob(baseInput());
+    const [first] = await exportAllJobs();
+    expect(first).toBeDefined();
+    if (!first) throw new Error('Expected seeded job.');
+    const second = {
+      ...first,
+      id: 2,
+      source_platform: 'linkedin' as const,
+      external_job_id: 'mirror',
+    };
+
+    expect(await importJobs([first, second], 'replace')).toEqual({
+      imported: 2,
+      skipped: 0,
+    });
+    expect(first.id).toBeDefined();
+    if (first.id === undefined) throw new Error('Expected persisted job id.');
+    expect(await getJob(first.id)).toEqual(first);
+    expect(await getJob(second.id)).toEqual(second);
+  });
+
+  it('treats the exact seven-day fuzzy boundary as a duplicate', async () => {
+    const now = new Date('2026-08-14T12:00:00.000Z');
+    const boundary = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const first = await upsertJob(baseInput());
+    await getDb().jobs.update(first.id, { created_at: boundary.toISOString() });
+    const [stored] = await exportAllJobs();
+    expect(stored).toBeDefined();
+    if (!stored) throw new Error('Expected seeded job.');
+    await getJob(first.id);
+
+    const candidate = {
+      ...stored,
+      id: 2,
+      source_platform: 'linkedin' as const,
+      external_job_id: 'boundary-copy',
+    };
+    const originalNow = Date.now;
+    Date.now = () => now.getTime();
+    try {
+      expect(await importJobs([candidate])).toEqual({
+        imported: 0,
+        skipped: 1,
+      });
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  it('atomically replaces jobs and settings while merge retains settings', async () => {
+    await upsertJob(baseInput());
+    const exported = await exportAllJobs();
+    await saveSettings({ autoDetect: false });
+
+    await importLocalDataset(exported, { autoDetect: true }, 'merge');
+    expect(await getSettings()).toEqual({ autoDetect: false });
+
+    await importLocalDataset(exported, { autoDetect: true }, 'replace');
+    expect(await getSettings()).toEqual({ autoDetect: true });
+    expect(await listJobs()).toHaveLength(1);
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { html } from '../html';
 import { navigate } from '../router';
 import { TagField } from '../components/TagField';
@@ -25,6 +25,7 @@ import {
   TAXONOMY_FIELDS,
   type TaxonomyField,
 } from '../../lib/taxonomyFields';
+import { JobFormLoadGuard } from './jobFormLoad';
 
 interface Props {
   mode: 'new' | 'edit';
@@ -35,22 +36,58 @@ export function JobFormView({ mode, id }: Props) {
   const [values, setValues] = useState<PopupFormValues>(emptyFormValues());
   const [loading, setLoading] = useState(mode === 'edit');
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [loadedId, setLoadedId] = useState<number>();
+  const [retryCount, setRetryCount] = useState(0);
+  const loadGuard = useRef(new JobFormLoadGuard());
   const [errors, setErrors] = useState<FieldError[]>([]);
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (mode !== 'edit' || id === undefined) return;
-    void (async () => {
-      const job = await getJob(id);
-      if (job) {
-        setValues(draftToFormValues(job));
-      } else {
-        setNotFound(true);
-      }
+    if (mode !== 'edit') {
+      loadGuard.current.invalidate();
+      setValues(emptyFormValues());
       setLoading(false);
+      setNotFound(false);
+      setLoadError('');
+      setLoadedId(undefined);
+      return;
+    }
+    if (id === undefined) {
+      setLoading(false);
+      setLoadError('This edit route is missing a job ID.');
+      setLoadedId(undefined);
+      return;
+    }
+    const request = loadGuard.current.begin();
+    setLoading(true);
+    setNotFound(false);
+    setLoadError('');
+    setLoadedId(undefined);
+    void (async () => {
+      try {
+        const job = await getJob(id);
+        if (!loadGuard.current.isCurrent(request)) return;
+        if (job) {
+          setValues(draftToFormValues(job));
+          setLoadedId(id);
+        } else {
+          setNotFound(true);
+        }
+      } catch (error) {
+        if (!loadGuard.current.isCurrent(request)) return;
+        setLoadError(
+          error instanceof Error ? error.message : 'Could not load this job.',
+        );
+      } finally {
+        if (loadGuard.current.isCurrent(request)) setLoading(false);
+      }
     })();
-  }, [mode, id]);
+    return () => {
+      loadGuard.current.invalidate();
+    };
+  }, [mode, id, retryCount]);
 
   const setField = <K extends keyof PopupFormValues>(
     key: K,
@@ -65,13 +102,40 @@ export function JobFormView({ mode, id }: Props) {
   const backHref =
     mode === 'edit' && id !== undefined ? `#/jobs/${String(id)}` : '#/jobs';
 
-  if (loading) return html`<p>Loading…</p>`;
+  // A mode transition reuses the component instance; never expose prior edit
+  // values while the new-job reset effect is pending.
+  if (mode === 'new' && loadedId !== undefined) return html`<p>Loading…</p>`;
+  if (
+    mode === 'edit' &&
+    (loading || loadedId !== id) &&
+    !notFound &&
+    !loadError
+  )
+    return html`<p>Loading…</p>`;
+  if (loadError) {
+    return html`<p role="alert">
+      ${loadError}
+      <button
+        type="button"
+        onClick=${() => {
+          setRetryCount((count) => count + 1);
+        }}
+      >
+        Retry
+      </button>
+      <a href="#/jobs">Back to jobs</a>
+    </p>`;
+  }
   if (notFound) {
     return html`<p>Job not found. <a href="#/jobs">Back to jobs</a></p>`;
   }
 
   const submit = async (event: Event) => {
     event.preventDefault();
+    if (mode === 'edit' && loadedId !== id) {
+      setStatus('Wait for the current job to finish loading.');
+      return;
+    }
     const foundErrors = validateFormValues(values);
     setErrors(foundErrors);
     if (foundErrors.length > 0) {

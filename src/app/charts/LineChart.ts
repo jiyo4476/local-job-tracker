@@ -12,6 +12,8 @@ export interface LineSeries {
 
 interface Props {
   series: LineSeries[];
+  title?: string;
+  description?: string;
   width?: number;
   height?: number;
 }
@@ -26,7 +28,13 @@ const SERIES_COLORS = [
   'chart-series-4',
 ] as const;
 
-export function LineChart({ series, width = 480, height = 180 }: Props) {
+export function LineChart({
+  series,
+  title = 'Line chart',
+  description = 'Values over time',
+  width = 480,
+  height = 180,
+}: Props) {
   const points = series[0]?.points ?? [];
   if (points.length === 0) {
     return html`<p class="tag-empty">No data yet.</p>`;
@@ -46,15 +54,17 @@ export function LineChart({ series, width = 480, height = 180 }: Props) {
 
   const everyNthLabel = Math.max(1, Math.ceil(points.length / 6));
 
-  return html`
+  return html`<div class="chart-with-data">
     <svg
       class="chart chart-line"
       viewBox="0 0 ${width} ${height}"
       width="100%"
       height=${height}
       role="img"
-      aria-label="Line chart"
+      aria-label=${title}
     >
+      <title>${title}</title>
+      <desc>${description}</desc>
       <line
         x1=${PADDING_LEFT}
         y1=${PADDING_TOP + plotHeight}
@@ -85,6 +95,7 @@ export function LineChart({ series, width = 480, height = 180 }: Props) {
               SERIES_COLORS[seriesIndex % SERIES_COLORS.length]
             }"
             fill="none"
+            stroke-dasharray=${seriesIndex === 0 ? undefined : `${String(seriesIndex + 2)} ${String((seriesIndex % 4) + 2)}`}
           />
         `,
       )}
@@ -109,5 +120,29 @@ export function LineChart({ series, width = 480, height = 180 }: Props) {
           `
         : null
     }
-  `;
+    <table class="sr-only">
+      <caption>
+        ${title}
+      </caption>
+      <thead>
+        <tr>
+          <th>Series</th>
+          <th>Period</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${series.flatMap((s) =>
+          s.points.map(
+            (point) =>
+              html`<tr>
+                <td>${s.name}</td>
+                <td>${point.label}</td>
+                <td>${point.value}</td>
+              </tr>`,
+          ),
+        )}
+      </tbody>
+    </table>
+  </div>`;
 }

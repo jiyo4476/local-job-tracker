@@ -7,6 +7,8 @@ export interface DonutSegment {
 
 interface Props {
   segments: DonutSegment[];
+  title?: string;
+  description?: string;
   size?: number;
 }
 
@@ -18,7 +20,12 @@ const SEGMENT_COLORS = [
 ] as const;
 const STROKE_WIDTH = 22;
 
-export function DonutChart({ segments, size = 160 }: Props) {
+export function DonutChart({
+  segments,
+  title = 'Donut chart',
+  description = 'Parts of a whole',
+  size = 160,
+}: Props) {
   const total = segments.reduce((sum, s) => sum + s.value, 0);
   if (total === 0) {
     return html`<p class="tag-empty">No data yet.</p>`;
@@ -51,8 +58,10 @@ export function DonutChart({ segments, size = 160 }: Props) {
         width=${size}
         height=${size}
         role="img"
-        aria-label="Donut chart"
+        aria-label=${title}
       >
+        <title>${title}</title>
+        <desc>${description}</desc>
         <g transform="rotate(-90 ${center} ${center})">
           ${arcs.map(
             (arc) => html`
@@ -80,6 +89,26 @@ export function DonutChart({ segments, size = 160 }: Props) {
           `,
         )}
       </ul>
+      <table class="sr-only">
+        <caption>
+          ${title}
+        </caption>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${arcs.map(
+            (arc) =>
+              html`<tr>
+                <td>${arc.label}</td>
+                <td>${arc.value}</td>
+              </tr>`,
+          )}
+        </tbody>
+      </table>
     </div>
   `;
 }

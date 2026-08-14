@@ -5,7 +5,7 @@ describe('extension message contracts', () => {
   it('accepts save requests with a job draft', () => {
     expect(
       extensionMessageSchema.parse({
-        type: 'SAVE_JOB',
+        type: 'SAVE_JOB_LOCAL',
         draft: {
           source_platform: 'indeed',
           external_job_id: 'abc123',
@@ -14,13 +14,13 @@ describe('extension message contracts', () => {
           job_link: 'https://example.com/jobs/abc123',
         },
       }),
-    ).toMatchObject({ type: 'SAVE_JOB' });
+    ).toMatchObject({ type: 'SAVE_JOB_LOCAL' });
   });
 
   it('accepts a local save result response', () => {
     expect(
       extensionResponseSchema.parse({
-        type: 'SAVE_JOB_RESULT',
+        type: 'SAVE_JOB_LOCAL_RESULT',
         ok: true,
         payload: {
           source_platform: 'indeed',
@@ -32,7 +32,7 @@ describe('extension message contracts', () => {
         result: { action: 'created', id: 1 },
       }),
     ).toMatchObject({
-      type: 'SAVE_JOB_RESULT',
+      type: 'SAVE_JOB_LOCAL_RESULT',
       result: { action: 'created', id: 1 },
     });
   });

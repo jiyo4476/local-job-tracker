@@ -437,13 +437,13 @@ async function saveJob(): Promise<void> {
   try {
     const draft = formValuesToDraft(values);
     const rawResponse: unknown = await browser.runtime.sendMessage({
-      type: 'SAVE_JOB',
+      type: 'SAVE_JOB_LOCAL',
       draft,
     });
     const response = extensionResponseSchema.parse(rawResponse);
     if (
       response.ok &&
-      response.type === 'SAVE_JOB_RESULT' &&
+      response.type === 'SAVE_JOB_LOCAL_RESULT' &&
       popupDraftContext
     ) {
       if (formRevision === submittedRevision) {
@@ -544,7 +544,7 @@ function renderResponse(response: ExtensionResponse): void {
     return;
   }
 
-  if (response.type === 'SAVE_JOB_RESULT') {
+  if (response.type === 'SAVE_JOB_LOCAL_RESULT') {
     setStatus(formatSaveResult(response.result), 'status');
   }
 }

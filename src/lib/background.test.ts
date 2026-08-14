@@ -58,8 +58,8 @@ describe('background save flow', () => {
   it('saves a job locally without any network round trip', async () => {
     const { handleMessage } = await import('../../entrypoints/background');
 
-    const response = await handleMessage({
-      type: 'SAVE_JOB',
+    const response: unknown = await handleMessage({
+      type: 'SAVE_JOB_LOCAL',
       draft: {
         source_platform: 'indeed',
         external_job_id: 'job-123',
@@ -70,10 +70,75 @@ describe('background save flow', () => {
     });
 
     expect(response).toMatchObject({
-      type: 'SAVE_JOB_RESULT',
+      type: 'SAVE_JOB_LOCAL_RESULT',
       ok: true,
       result: { action: 'created' },
     });
+  });
+
+  it('queues concurrent local saves instead of dropping either job', async () => {
+    const { handleMessage } = await import('../../entrypoints/background');
+    const draft = {
+      source_platform: 'indeed' as const,
+      company_name: 'Acme',
+      job_title: 'Software Engineer',
+      job_link: 'https://example.com/jobs/job',
+    };
+
+    const [first, second] = await Promise.all([
+      handleMessage({
+        type: 'SAVE_JOB_LOCAL',
+        draft: { ...draft, external_job_id: 'concurrent-1' },
+      }),
+      handleMessage({
+        type: 'SAVE_JOB_LOCAL',
+        draft: {
+          ...draft,
+          external_job_id: 'concurrent-2',
+          job_title: 'Product Engineer',
+        },
+      }),
+    ]);
+
+    expect(first).toMatchObject({ ok: true, type: 'SAVE_JOB_LOCAL_RESULT' });
+    expect(second).toMatchObject({ ok: true, type: 'SAVE_JOB_LOCAL_RESULT' });
+  });
+
+  it('keeps validation failures distinct from local storage failures', async () => {
+    const { handleMessage } = await import('../../entrypoints/background');
+    const response = await handleMessage({
+      type: 'SAVE_JOB_LOCAL',
+      draft: { source_platform: 'indeed' },
+    });
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'PAYLOAD_INVALID' },
+    });
+  });
+
+  it('reports storage failures with retry-safe draft guidance', async () => {
+    vi.doMock('./db/jobsRepo', () => ({
+      upsertJob: vi.fn().mockRejectedValue(new Error('Quota exceeded')),
+    }));
+    const { handleMessage } = await import('../../entrypoints/background');
+    const response: unknown = await handleMessage({
+      type: 'SAVE_JOB_LOCAL',
+      draft: {
+        source_platform: 'indeed',
+        external_job_id: 'quota-1',
+        company_name: 'Acme',
+        job_title: 'Engineer',
+        job_link: 'https://example.com/jobs/quota-1',
+      },
+    });
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'STORAGE_FAILED',
+      },
+    });
+    expect(JSON.stringify(response)).toContain('draft has been kept');
+    vi.doUnmock('./db/jobsRepo');
   });
 
   it('returns only non-sensitive settings to extension pages', async () => {

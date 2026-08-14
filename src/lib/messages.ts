@@ -13,7 +13,6 @@ export const extensionErrorCodeSchema = z.enum([
   'EXTRACT_FAILED',
   'PAYLOAD_INVALID',
   'SETTINGS_INVALID',
-  'SAVE_IN_PROGRESS',
   'POPUP_CONTEXT_STALE',
   'STORAGE_FAILED',
 ]);
@@ -29,7 +28,7 @@ export const extractActiveTabRequestSchema = z.object({
 });
 
 export const saveJobRequestSchema = z.object({
-  type: z.literal('SAVE_JOB'),
+  type: z.literal('SAVE_JOB_LOCAL'),
   draft: jobDraftSchema,
 });
 
@@ -91,7 +90,7 @@ export const saveJobResultSchema = z.object({
 });
 
 export const saveJobResponseSchema = z.object({
-  type: z.literal('SAVE_JOB_RESULT'),
+  type: z.literal('SAVE_JOB_LOCAL_RESULT'),
   ok: z.literal(true),
   payload: scrapePayloadSchema,
   result: saveJobResultSchema,

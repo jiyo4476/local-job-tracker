@@ -2,12 +2,15 @@ import {
   DEFAULT_INTERVIEW_STAGE,
   getDb,
   interviewStageSchema,
+  jobContactSchema,
   newJobInputSchema,
   storedJobSchema,
   type InterviewStage,
+  type JobContact,
   type NewJobInput,
   type StoredJob,
 } from './schema';
+import { extensionSettingsSchema, type ExtensionSettings } from '../settings';
 
 const FUZZY_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -35,6 +38,38 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+async function findDuplicate(
+  candidate: Pick<
+    StoredJob,
+    'source_platform' | 'external_job_id' | 'company_name' | 'job_title'
+  >,
+  referenceTime = Date.now(),
+): Promise<{ kind: 'exact' | 'fuzzy'; job: StoredJob } | undefined> {
+  const jobs = getDb().jobs;
+  const exact = await jobs
+    .where('[source_platform+external_job_id]')
+    .equals([candidate.source_platform, candidate.external_job_id])
+    .first();
+  if (exact) return { kind: 'exact', job: exact };
+
+  const windowStart = new Date(
+    referenceTime - FUZZY_DEDUP_WINDOW_MS,
+  ).toISOString();
+  const normalizedCompany = normalizeForMatch(candidate.company_name);
+  const normalizedTitle = normalizeForMatch(candidate.job_title);
+  const fuzzy = await jobs
+    .where('created_at')
+    .aboveOrEqual(windowStart)
+    .filter(
+      (job) =>
+        job.is_active &&
+        normalizeForMatch(job.company_name) === normalizedCompany &&
+        normalizeForMatch(job.job_title) === normalizedTitle,
+    )
+    .first();
+  return fuzzy ? { kind: 'fuzzy', job: fuzzy } : undefined;
+}
+
 /**
  * Saves a captured or manually entered job, applying the same two-layer
  * dedup rule the backend previously enforced in `POST /api/scrape`:
@@ -46,10 +81,8 @@ export async function upsertJob(input: NewJobInput): Promise<SaveJobResult> {
   const db = getDb();
 
   return db.transaction('rw', db.jobs, async () => {
-    const exact = await db.jobs
-      .where('[source_platform+external_job_id]')
-      .equals([parsed.source_platform, parsed.external_job_id])
-      .first();
+    const duplicate = await findDuplicate(parsed);
+    const exact = duplicate?.kind === 'exact' ? duplicate.job : undefined;
 
     if (exact?.id !== undefined) {
       const updated: StoredJob = storedJobSchema.parse({
@@ -69,23 +102,7 @@ export async function upsertJob(input: NewJobInput): Promise<SaveJobResult> {
       return { action: 'updated', id: exact.id };
     }
 
-    const windowStart = new Date(
-      Date.now() - FUZZY_DEDUP_WINDOW_MS,
-    ).toISOString();
-    const normalizedCompany = normalizeForMatch(parsed.company_name);
-    const normalizedTitle = normalizeForMatch(parsed.job_title);
-
-    const recentCandidates = await db.jobs
-      .where('created_at')
-      .aboveOrEqual(windowStart)
-      .filter((job) => job.is_active)
-      .toArray();
-
-    const fuzzyMatch = recentCandidates.find(
-      (job) =>
-        normalizeForMatch(job.company_name) === normalizedCompany &&
-        normalizeForMatch(job.job_title) === normalizedTitle,
-    );
+    const fuzzyMatch = duplicate?.kind === 'fuzzy' ? duplicate.job : undefined;
 
     if (fuzzyMatch?.id !== undefined) {
       return { action: 'duplicate_skipped', id: fuzzyMatch.id };
@@ -177,6 +194,68 @@ export async function updateJob(
   });
 }
 
+export async function addJobContact(
+  jobId: number,
+  input: Omit<JobContact, 'id' | 'created_at'> &
+    Partial<Pick<JobContact, 'id' | 'created_at'>>,
+): Promise<JobContact> {
+  const contact = jobContactSchema.parse(input);
+  return mutateJobContacts(jobId, (contacts) => ({
+    contacts: [...contacts, contact],
+    result: contact,
+  }));
+}
+
+export async function updateJobContact(
+  jobId: number,
+  contactId: string,
+  patch: Partial<Omit<JobContact, 'id' | 'created_at'>>,
+): Promise<JobContact> {
+  return mutateJobContacts(jobId, (contacts) => {
+    const index = contacts.findIndex((contact) => contact.id === contactId);
+    if (index < 0) throw new Error(`No contact with id ${contactId}.`);
+    const contact = jobContactSchema.parse({ ...contacts[index], ...patch });
+    const updatedContacts = [...contacts];
+    updatedContacts[index] = contact;
+    return { contacts: updatedContacts, result: contact };
+  });
+}
+
+export async function removeJobContact(
+  jobId: number,
+  contactId: string,
+): Promise<void> {
+  await mutateJobContacts(jobId, (contacts) => {
+    const remaining = contacts.filter((contact) => contact.id !== contactId);
+    if (remaining.length === contacts.length) {
+      throw new Error(`No contact with id ${contactId}.`);
+    }
+    return { contacts: remaining, result: undefined };
+  });
+}
+
+async function mutateJobContacts<Result>(
+  jobId: number,
+  mutation: (contacts: JobContact[]) => {
+    contacts: JobContact[];
+    result: Result;
+  },
+): Promise<Result> {
+  const db = getDb();
+  return db.transaction('rw', db.jobs, async () => {
+    const job = await db.jobs.get(jobId);
+    if (!job) throw new Error(`No job with id ${String(jobId)}.`);
+    const { contacts, result } = mutation(job.contacts);
+    const updated = storedJobSchema.parse({
+      ...job,
+      contacts,
+      updated_at: nowIso(),
+    });
+    await db.jobs.put(updated);
+    return result;
+  });
+}
+
 export async function softDeleteJob(id: number): Promise<void> {
   const db = getDb();
   const existing = await db.jobs.get(id);
@@ -216,29 +295,52 @@ export async function importJobs(
   mode: 'replace' | 'merge' = 'merge',
 ): Promise<{ imported: number; skipped: number }> {
   const db = getDb();
-  return db.transaction('rw', db.jobs, async () => {
+  const parsedJobs = jobs.map((job) => storedJobSchema.parse(job));
+  return db.transaction('rw', db.jobs, () =>
+    importParsedJobs(parsedJobs, mode),
+  );
+}
+
+export async function importLocalDataset(
+  jobs: StoredJob[],
+  settings: ExtensionSettings,
+  mode: 'replace' | 'merge' = 'merge',
+): Promise<{ imported: number; skipped: number }> {
+  const parsedJobs = jobs.map((job) => storedJobSchema.parse(job));
+  const parsedSettings = extensionSettingsSchema.parse(settings);
+  const db = getDb();
+  return db.transaction('rw', db.jobs, db.settings, async () => {
+    const result = await importParsedJobs(parsedJobs, mode);
     if (mode === 'replace') {
-      await db.jobs.clear();
+      await db.settings.put({ key: 'extension', ...parsedSettings });
     }
-    let imported = 0;
-    let skipped = 0;
-    for (const raw of jobs) {
-      const parsed = storedJobSchema.omit({ id: true }).safeParse(raw);
-      if (!parsed.success) {
-        skipped += 1;
-        continue;
-      }
-      const exact = await db.jobs
-        .where('[source_platform+external_job_id]')
-        .equals([parsed.data.source_platform, parsed.data.external_job_id])
-        .first();
-      if (exact) {
-        skipped += 1;
-        continue;
-      }
-      await db.jobs.add(parsed.data);
-      imported += 1;
-    }
-    return { imported, skipped };
+    return result;
   });
+}
+
+async function importParsedJobs(
+  parsedJobs: StoredJob[],
+  mode: 'replace' | 'merge',
+): Promise<{ imported: number; skipped: number }> {
+  const jobs = getDb().jobs;
+  if (mode === 'replace') {
+    await jobs.clear();
+    await jobs.bulkAdd(parsedJobs);
+    return { imported: parsedJobs.length, skipped: 0 };
+  }
+
+  let imported = 0;
+  let skipped = 0;
+  for (const parsed of parsedJobs) {
+    if (await findDuplicate(parsed)) {
+      skipped += 1;
+      continue;
+    }
+    // Imported primary keys are meaningful only for a full replacement.
+    const withoutId = { ...parsed };
+    delete withoutId.id;
+    await jobs.add(withoutId);
+    imported += 1;
+  }
+  return { imported, skipped };
 }

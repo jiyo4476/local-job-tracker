@@ -7,6 +7,18 @@ export const MAX_TAGS_PER_FIELD = 100;
 export const MAX_TAG_LENGTH = 200;
 
 const optionalText = z.string().min(1).max(MAX_FIELD_LENGTH).optional();
+export const httpUrlSchema = z
+  .string()
+  .max(MAX_FIELD_LENGTH)
+  .url()
+  .refine((value) => {
+    try {
+      const protocol = new URL(value).protocol;
+      return protocol === 'http:' || protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }, 'URL must use http or https.');
 const optionalTags = z
   .array(z.string().min(1).max(MAX_TAG_LENGTH))
   .max(MAX_TAGS_PER_FIELD)
@@ -50,7 +62,7 @@ export const jobDraftSchema = z.object({
   external_job_id: optionalText,
   company_name: optionalText,
   job_title: optionalText,
-  job_link: z.string().max(MAX_FIELD_LENGTH).url().optional(),
+  job_link: httpUrlSchema.optional(),
   job_location: optionalText,
   is_remote: z.boolean().optional(),
   job_description: z.string().max(MAX_JOB_DESCRIPTION_LENGTH).optional(),
@@ -77,7 +89,7 @@ export const scrapePayloadSchema = jobDraftSchema
     external_job_id: z.string().min(1),
     company_name: z.string().min(1),
     job_title: z.string().min(1),
-    job_link: z.string().url(),
+    job_link: httpUrlSchema,
   })
   .omit({ extraction_confidence: true });
 

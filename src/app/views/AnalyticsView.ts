@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { html } from '../html';
+import { useAsyncResource } from '../useAsyncResource';
 import { listJobs } from '../../lib/db/jobsRepo';
-import type { StoredJob } from '../../lib/db/schema';
 import {
   platformBreakdown,
   remoteOnsiteByWeek,
@@ -23,16 +23,21 @@ function formatCents(cents: number): string {
 }
 
 export function AnalyticsView() {
-  const [jobs, setJobs] = useState<StoredJob[] | null>(null);
   const [taxonomyField, setTaxonomyField] = useState<TaxonomyField>('skills');
-
-  useEffect(() => {
-    void (async () => {
-      setJobs(await listJobs({ includeInactive: true }));
-    })();
-  }, []);
-
-  if (!jobs) return html`<p>Loading…</p>`;
+  const resource = useAsyncResource(
+    () => listJobs({ includeInactive: false }),
+    [],
+    'Could not load analytics.',
+  );
+  if (resource.error)
+    return html`<p role="alert">
+      ${resource.error}
+      <button type="button" onClick=${() => void resource.reload()}>
+        Retry
+      </button>
+    </p>`;
+  if (!resource.data) return html`<p>Loading…</p>`;
+  const jobs = resource.data;
 
   const demand = skillDemandOverTime(jobs);
   const salary = salarySummaryByJobTypeAndExperience(jobs);
@@ -44,11 +49,12 @@ export function AnalyticsView() {
   return html`
     <div class="analytics-view">
       <section>
-        <h2>Skill demand over time (top 6, 12 weeks)</h2>
+        <h2>Skill demand over time (top 15, 12 months)</h2>
         <${LineChart}
+          title="Skill demand over time"
           series=${demand.series.map((s) => ({
             name: s.skill,
-            points: demand.weeks.map((w, i) => ({
+            points: demand.periods.map((w, i) => ({
               label: w,
               value: s.counts[i] ?? 0,
             })),
@@ -59,6 +65,7 @@ export function AnalyticsView() {
       <section>
         <h2>Platform breakdown</h2>
         <${BarChart}
+          title="Jobs by platform"
           data=${platforms.map((p) => ({ label: p.platform, value: p.count }))}
         />
       </section>
@@ -66,6 +73,7 @@ export function AnalyticsView() {
       <section>
         <h2>Remote vs onsite, by week</h2>
         <${LineChart}
+          title="Remote versus onsite jobs by week"
           series=${[
             {
               name: 'Remote',
@@ -127,6 +135,7 @@ export function AnalyticsView() {
           <div>
             <h3>Requires clearance</h3>
             <${BarChart}
+              title="Top skills requiring clearance"
               data=${clearance.withClearance.map((s) => ({
                 label: s.name,
                 value: s.count,
@@ -136,6 +145,7 @@ export function AnalyticsView() {
           <div>
             <h3>No clearance required</h3>
             <${BarChart}
+              title="Top skills without clearance"
               data=${clearance.withoutClearance.map((s) => ({
                 label: s.name,
                 value: s.count,
@@ -166,6 +176,7 @@ export function AnalyticsView() {
           </select>
         </label>
         <${BarChart}
+          title="Top taxonomy values"
           data=${taxonomy.map((t) => ({ label: t.name, value: t.count }))}
         />
       </section>

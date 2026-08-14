@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'preact/hooks';
 import { html } from '../html';
+import { useAsyncResource } from '../useAsyncResource';
 import { listJobs } from '../../lib/db/jobsRepo';
 import type { StoredJob } from '../../lib/db/schema';
 
@@ -10,51 +10,54 @@ interface CompanyRow {
 }
 
 export function CompaniesView() {
-  const [rows, setRows] = useState<CompanyRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    void (async () => {
-      const jobs = await listJobs({ includeInactive: true });
-      setRows(groupByCompany(jobs));
-      setLoading(false);
-    })();
-  }, []);
+  const resource = useAsyncResource(
+    async () => groupByCompany(await listJobs({ includeInactive: true })),
+    [],
+    'Could not load companies.',
+  );
+  const rows = resource.data ?? [];
 
   return html`
     <div class="companies-view">
       <h2>Companies</h2>
       ${
-        loading
-          ? html`<p>Loading…</p>`
-          : rows.length === 0
-            ? html`<p class="tag-empty">No companies yet.</p>`
-            : html`
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Company</th>
-                      <th>Jobs</th>
-                      <th>Active</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${rows.map(
-                      (row) => html`
-                        <tr>
-                          <td>
-                            <a href="#/jobs?q=${encodeURIComponent(row.name)}"
-                              >${row.name}</a
-                            >
-                          </td>
-                          <td>${row.jobCount}</td>
-                          <td>${row.activeCount}</td>
-                        </tr>
-                      `,
-                    )}
-                  </tbody>
-                </table>
-              `
+        resource.error
+          ? html`<p role="alert">
+              ${resource.error}
+              <button type="button" onClick=${() => void resource.reload()}>
+                Retry
+              </button>
+            </p>`
+          : resource.loading
+            ? html`<p>Loading…</p>`
+            : rows.length === 0
+              ? html`<p class="tag-empty">No companies yet.</p>`
+              : html`
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Company</th>
+                        <th>Jobs</th>
+                        <th>Active</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rows.map(
+                        (row) => html`
+                          <tr>
+                            <td>
+                              <a href="#/jobs?q=${encodeURIComponent(row.name)}"
+                                >${row.name}</a
+                              >
+                            </td>
+                            <td>${row.jobCount}</td>
+                            <td>${row.activeCount}</td>
+                          </tr>
+                        `,
+                      )}
+                    </tbody>
+                  </table>
+                `
       }
     </div>
   `;

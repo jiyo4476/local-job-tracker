@@ -25,6 +25,7 @@ function job(overrides: Partial<StoredJob> = {}): StoredJob {
     interview_stage: 'not_applied',
     priority: 0,
     notes: '',
+    contacts: [],
     is_active: true,
     created_at: timestamp,
     updated_at: timestamp,
@@ -143,18 +144,22 @@ describe('skillsByClearance', () => {
 });
 
 describe('skillDemandOverTime', () => {
-  it('tracks weekly mention counts for the top skills', () => {
+  it('tracks monthly mentions using date_posted and created_at fallback', () => {
     const now = new Date('2026-08-12T00:00:00.000Z');
     const result = skillDemandOverTime(
       [
-        job({ skills: ['TypeScript'], created_at: '2026-08-11T00:00:00.000Z' }),
-        job({ skills: ['TypeScript'], created_at: '2026-08-04T00:00:00.000Z' }),
+        job({
+          skills: ['TypeScript'],
+          date_posted: '2026-08-01',
+          created_at: '2026-07-11T00:00:00.000Z',
+        }),
+        job({ skills: ['TypeScript'], created_at: '2026-07-04T00:00:00.000Z' }),
       ],
       now,
       2,
       1,
     );
-    expect(result.weeks).toEqual(['2026-08-03', '2026-08-10']);
+    expect(result.periods).toEqual(['2026-07', '2026-08']);
     expect(result.series).toEqual([{ skill: 'TypeScript', counts: [1, 1] }]);
   });
 });

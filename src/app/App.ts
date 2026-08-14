@@ -6,6 +6,7 @@ import { DashboardView } from './views/DashboardView';
 import { JobDetailView } from './views/JobDetailView';
 import { JobFormView } from './views/JobFormView';
 import { JobsListView } from './views/JobsListView';
+import { SettingsView } from './views/SettingsView';
 
 const JOBS_SECTION_ROUTES: readonly Route['name'][] = [
   'jobs',
@@ -37,6 +38,11 @@ export function App() {
             class=${route.name === 'analytics' ? 'active' : ''}
             >Analytics</a
           >
+          <a
+            href="#/settings"
+            class=${route.name === 'settings' ? 'active' : ''}
+            >Settings</a
+          >
           <a href="#/jobs/new" class="button-link">+ Add job</a>
         </nav>
       </header>
@@ -55,6 +61,7 @@ function renderRoute(route: Route) {
   if (route.name === 'jobs') {
     return html`<${JobsListView} initialQuery=${route.query} />`;
   }
+  if (route.name === 'settings') return html`<${SettingsView} />`;
   if (route.name === 'job-new') {
     return html`<${JobFormView} mode="new" />`;
   }

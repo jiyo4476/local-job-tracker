@@ -292,8 +292,8 @@ export function firstInvalidField(
 
 function isValidUrl(value: string): boolean {
   try {
-    new URL(value);
-    return true;
+    const protocol = new URL(value).protocol;
+    return protocol === 'http:' || protocol === 'https:';
   } catch {
     return false;
   }

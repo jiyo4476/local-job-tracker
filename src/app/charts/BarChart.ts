@@ -7,6 +7,8 @@ export interface BarDatum {
 
 interface Props {
   data: BarDatum[];
+  title?: string;
+  description?: string;
   width?: number;
   barHeight?: number;
   formatValue?: (value: number) => string;
@@ -18,6 +20,8 @@ const BAR_GAP = 6;
 
 export function BarChart({
   data,
+  title = 'Bar chart',
+  description = 'Values by category',
   width = 480,
   barHeight = 20,
   formatValue,
@@ -30,15 +34,17 @@ export function BarChart({
   const chartWidth = Math.max(20, width - LABEL_WIDTH - VALUE_GUTTER);
   const height = data.length * (barHeight + BAR_GAP);
 
-  return html`
+  return html`<div class="chart-with-data">
     <svg
       class="chart chart-bar"
       viewBox="0 0 ${width} ${height}"
       width="100%"
       height=${height}
       role="img"
-      aria-label="Bar chart"
+      aria-label=${title}
     >
+      <title>${title}</title>
+      <desc>${description}</desc>
       ${data.map((d, index) => {
         const barWidth = (d.value / max) * chartWidth;
         const y = index * (barHeight + BAR_GAP);
@@ -66,5 +72,25 @@ export function BarChart({
         `;
       })}
     </svg>
-  `;
+    <table class="sr-only">
+      <caption>
+        ${title}
+      </caption>
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.map(
+          (d) =>
+            html`<tr>
+              <td>${d.label}</td>
+              <td>${formatValue ? formatValue(d.value) : String(d.value)}</td>
+            </tr>`,
+        )}
+      </tbody>
+    </table>
+  </div>`;
 }

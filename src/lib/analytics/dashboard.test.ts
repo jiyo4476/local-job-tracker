@@ -22,6 +22,7 @@ function job(overrides: Partial<StoredJob> = {}): StoredJob {
     interview_stage: 'not_applied',
     priority: 0,
     notes: '',
+    contacts: [],
     is_active: true,
     created_at: timestamp,
     updated_at: timestamp,

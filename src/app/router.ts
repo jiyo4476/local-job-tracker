@@ -7,7 +7,8 @@ export type Route =
   | { name: 'job-new' }
   | { name: 'job-detail'; id: number }
   | { name: 'job-edit'; id: number }
-  | { name: 'companies' };
+  | { name: 'companies' }
+  | { name: 'settings' };
 
 const DEFAULT_ROUTE: Route = { name: 'dashboard' };
 
@@ -23,6 +24,8 @@ export function parseHash(hash: string): Route {
   if (segments[0] === 'companies') {
     return { name: 'companies' };
   }
+
+  if (segments[0] === 'settings') return { name: 'settings' };
 
   if (segments[0] === 'jobs') {
     if (segments[1] === 'new') return { name: 'job-new' };

@@ -1,25 +1,27 @@
-import { useEffect, useState } from 'preact/hooks';
 import { html } from '../html';
+import { useAsyncResource } from '../useAsyncResource';
 import { listJobs } from '../../lib/db/jobsRepo';
-import {
-  computeDashboardStats,
-  type DashboardStats,
-} from '../../lib/analytics/dashboard';
+import { computeDashboardStats } from '../../lib/analytics/dashboard';
 import { BarChart } from '../charts/BarChart';
 import { DonutChart } from '../charts/DonutChart';
 import { LineChart } from '../charts/LineChart';
 
 export function DashboardView() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-
-  useEffect(() => {
-    void (async () => {
-      const jobs = await listJobs({ includeInactive: false });
-      setStats(computeDashboardStats(jobs));
-    })();
-  }, []);
-
-  if (!stats) return html`<p>Loading…</p>`;
+  const resource = useAsyncResource(
+    async () =>
+      computeDashboardStats(await listJobs({ includeInactive: true })),
+    [],
+    'Could not load the dashboard.',
+  );
+  if (resource.error)
+    return html`<p role="alert">
+      ${resource.error}
+      <button type="button" onClick=${() => void resource.reload()}>
+        Retry
+      </button>
+    </p>`;
+  if (!resource.data) return html`<p>Loading…</p>`;
+  const stats = resource.data;
 
   return html`
     <div class="dashboard-view">
@@ -45,6 +47,7 @@ export function DashboardView() {
       <section>
         <h2>Funnel</h2>
         <${BarChart}
+          title="Application stage funnel"
           data=${Object.entries(stats.stageCounts).map(([label, value]) => ({
             label,
             value,
@@ -55,6 +58,7 @@ export function DashboardView() {
       <section>
         <h2>Top skills</h2>
         <${BarChart}
+          title="Top skills"
           data=${stats.topSkills.map((s) => ({ label: s.name, value: s.count }))}
         />
       </section>
@@ -63,6 +67,7 @@ export function DashboardView() {
         <section>
           <h2>Weekly activity (12 weeks)</h2>
           <${LineChart}
+            title="Weekly job activity"
             series=${[
               {
                 name: 'Jobs added',
@@ -77,6 +82,7 @@ export function DashboardView() {
         <section>
           <h2>Remote vs onsite</h2>
           <${DonutChart}
+            title="Remote versus onsite jobs"
             segments=${[
               { label: 'Remote', value: stats.remoteSplit.remote },
               { label: 'Onsite', value: stats.remoteSplit.onsite },

@@ -264,3 +264,41 @@ body {
   flex-wrap: wrap;
   gap: 14px;
 }
+
+.backup-panel,
+.backup-panel fieldset {
+  display: grid;
+  gap: 10px;
+}
+
+.backup-panel {
+  max-width: 620px;
+}
+
+.backup-panel fieldset label {
+  align-items: start;
+  display: flex;
+  gap: 8px;
+}
+
+.file-button {
+  display: grid;
+  gap: 6px;
+}
+
+.status-message {
+  background: color-mix(in srgb, Highlight 8%, Canvas);
+  border-left: 3px solid Highlight;
+  padding: 8px 10px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
