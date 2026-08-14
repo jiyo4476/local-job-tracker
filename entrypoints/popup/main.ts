@@ -73,11 +73,6 @@ const ERROR_FIELDS: DraftFormField[] = [
 ];
 
 const statusEl = document.querySelector<HTMLDivElement>('#status');
-const authGateEl = document.querySelector<HTMLElement>('#auth-gate');
-const authStatusEl = document.querySelector<HTMLDivElement>('#auth-status');
-const appContentEl = document.querySelector<HTMLDivElement>('#app-content');
-const signInButton =
-  document.querySelector<HTMLButtonElement>('#sign-in-button');
 const form = document.querySelector<HTMLFormElement>('#job-form');
 const extractButton =
   document.querySelector<HTMLButtonElement>('#extract-button');
@@ -336,36 +331,12 @@ saveButton?.addEventListener('click', () => {
   void saveJob();
 });
 
-signInButton?.addEventListener('click', () => {
-  void signIn();
-});
-
 renderTaxonomyGroups();
 void initializePopup();
 
 async function initializePopup(): Promise<void> {
-  setAuthStatus('Checking sign-in status…');
-  setSignInDisabled(true);
   popupDraftContext = await getActiveTabContext();
-
-  try {
-    const rawResponse: unknown = await browser.runtime.sendMessage({
-      type: 'GET_AUTH_STATUS',
-    });
-    const response = extensionResponseSchema.parse(rawResponse);
-    if (
-      response.ok &&
-      response.type === 'GET_AUTH_STATUS_RESULT' &&
-      response.authenticated
-    ) {
-      showApp();
-      await restoreDraftOrExtract();
-      return;
-    }
-    showAuthGate();
-  } catch {
-    showAuthGate('Could not verify your sign-in. Try again.');
-  }
+  await restoreDraftOrExtract();
 }
 
 async function autoExtractIfEnabled(): Promise<void> {
@@ -385,30 +356,6 @@ async function autoExtractIfEnabled(): Promise<void> {
     'Open a supported job page, then select Scan active tab.',
     'status',
   );
-}
-
-async function signIn(): Promise<void> {
-  setAuthStatus('Opening Authentik sign-in…');
-  setSignInDisabled(true);
-
-  try {
-    const rawResponse: unknown = await browser.runtime.sendMessage({
-      type: 'OAUTH_SIGN_IN',
-    });
-    const response = extensionResponseSchema.parse(rawResponse);
-    if (!response.ok) {
-      showAuthGate(response.error.message);
-      return;
-    }
-    if (response.type !== 'OAUTH_SIGN_IN_RESULT') {
-      showAuthGate('Could not confirm Authentik sign-in. Try again.');
-      return;
-    }
-    showApp();
-    await restoreDraftOrExtract();
-  } catch {
-    showAuthGate('Could not complete Authentik sign-in. Try again.');
-  }
 }
 
 async function restoreDraftOrExtract(): Promise<void> {
@@ -439,27 +386,6 @@ async function getActiveTabContext(): Promise<PopupDraftContext | undefined> {
   } catch {
     return undefined;
   }
-}
-
-function showApp(): void {
-  if (authGateEl) authGateEl.hidden = true;
-  if (appContentEl) appContentEl.hidden = false;
-}
-
-function showAuthGate(message = 'Sign in to continue.'): void {
-  if (appContentEl) appContentEl.hidden = true;
-  if (authGateEl) authGateEl.hidden = false;
-  setAuthStatus(message);
-  setSignInDisabled(false);
-  signInButton?.focus();
-}
-
-function setAuthStatus(message: string): void {
-  if (authStatusEl) authStatusEl.textContent = message;
-}
-
-function setSignInDisabled(disabled: boolean): void {
-  if (signInButton) signInButton.disabled = disabled;
 }
 
 async function extractActiveTab(): Promise<void> {
@@ -511,13 +437,13 @@ async function saveJob(): Promise<void> {
   try {
     const draft = formValuesToDraft(values);
     const rawResponse: unknown = await browser.runtime.sendMessage({
-      type: 'SAVE_JOB',
+      type: 'SAVE_JOB_LOCAL',
       draft,
     });
     const response = extensionResponseSchema.parse(rawResponse);
     if (
       response.ok &&
-      response.type === 'SAVE_JOB_RESULT' &&
+      response.type === 'SAVE_JOB_LOCAL_RESULT' &&
       popupDraftContext
     ) {
       if (formRevision === submittedRevision) {
@@ -618,7 +544,7 @@ function renderResponse(response: ExtensionResponse): void {
     return;
   }
 
-  if (response.type === 'SAVE_JOB_RESULT') {
+  if (response.type === 'SAVE_JOB_LOCAL_RESULT') {
     setStatus(formatSaveResult(response.result), 'status');
   }
 }
@@ -630,11 +556,6 @@ function handleError(code: string, message: string): void {
       'No job data was found on this page. Enter the details manually.',
       'status',
     );
-    return;
-  }
-
-  if (code === 'OAUTH_FAILED') {
-    showAuthGate(message);
     return;
   }
 
@@ -758,25 +679,13 @@ async function clearCurrentDraft(): Promise<void> {
 }
 
 function formatSaveResult(result: SaveJobResult): string {
-  const action = result.action ?? mapLegacyStatus(result.status);
-  const jobId = result.job_id ?? result.id;
-  const suffix = jobId ? ` Job ID: ${String(jobId)}.` : '';
+  const suffix = ` Job ID: ${String(result.id)}.`;
 
-  if (action === 'created') return `Created job in Job Tracker.${suffix}`;
-  if (action === 'updated')
+  if (result.action === 'created')
+    return `Created job in Job Tracker.${suffix}`;
+  if (result.action === 'updated')
     return `Updated existing job in Job Tracker.${suffix}`;
-  if (action === 'duplicate_skipped') {
-    return `Duplicate found; existing job was left unchanged.${suffix}`;
-  }
-
-  return result.message || `Saved job to Job Tracker.${suffix}`;
-}
-
-function mapLegacyStatus(
-  status: SaveJobResult['status'],
-): SaveJobResult['action'] | undefined {
-  if (status === 'duplicate') return 'duplicate_skipped';
-  return status;
+  return `Duplicate found; existing job was left unchanged.${suffix}`;
 }
 
 function readFormValues(): PopupFormValues {

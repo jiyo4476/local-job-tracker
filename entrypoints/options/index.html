@@ -11,23 +11,9 @@
       <header>
         <h1>Job Tracker Capture</h1>
       </header>
-      <section id="auth-gate" class="auth-gate" aria-labelledby="auth-title">
-        <h2 id="auth-title">Sign in required</h2>
-        <p>Sign in with Authentik to manage extension settings.</p>
-        <button id="oauth-sign-in" type="button">Sign in with Authentik</button>
-        <div id="auth-status" role="status">
-          Checking sign-in status&hellip;
-        </div>
-      </section>
-
-      <div id="settings-content" hidden>
+      <div id="settings-content">
         <section id="status" role="status"></section>
         <form id="settings-form">
-          <section class="settings-section">
-            <button id="test-connection" type="button">Test Connection</button>
-            <button id="oauth-sign-out" type="button">Sign out</button>
-          </section>
-
           <label class="row">
             <input id="auto-detect" name="autoDetect" type="checkbox" />
             Auto-scan supported job pages when the popup opens

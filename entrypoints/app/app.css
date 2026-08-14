@@ -1,0 +1,304 @@
+body {
+  min-width: 100%;
+}
+
+.app-shell {
+  display: grid;
+  gap: 18px;
+  margin: 0 auto;
+  max-width: 960px;
+  padding: 20px;
+}
+
+.app-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.app-nav {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.app-nav a {
+  border-radius: 6px;
+  padding: 6px 10px;
+  text-decoration: none;
+}
+
+.app-nav a.active {
+  background: color-mix(in srgb, Highlight 14%, Canvas);
+  font-weight: 600;
+}
+
+.button-link {
+  background: color-mix(in srgb, Highlight 14%, Canvas);
+  border: 1px solid color-mix(in srgb, Highlight 38%, Canvas);
+}
+
+.app-main {
+  display: grid;
+  gap: 16px;
+}
+
+.filters-row {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.filters-row label {
+  min-width: 140px;
+}
+
+.data-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 14%, Canvas);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.data-table tbody tr:hover {
+  background: color-mix(in srgb, Highlight 6%, Canvas);
+}
+
+.muted {
+  color: color-mix(in srgb, CanvasText 60%, Canvas);
+  font-weight: 400;
+}
+
+.inactive-banner {
+  background: color-mix(in srgb, Mark 10%, Canvas);
+  border: 1px solid color-mix(in srgb, Mark 35%, Canvas);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.job-meta {
+  display: grid;
+  gap: 4px 12px;
+  grid-template-columns: max-content 1fr;
+}
+
+.job-meta dt {
+  color: color-mix(in srgb, CanvasText 60%, Canvas);
+}
+
+.job-meta dd {
+  margin: 0;
+}
+
+.job-description {
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+.actions-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.actions-cell a,
+.actions-cell button {
+  font-size: 12px;
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+.tag-empty {
+  color: color-mix(in srgb, CanvasText 60%, Canvas);
+}
+
+.dashboard-view section,
+.analytics-view section {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-view h2,
+.analytics-view h2 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.dashboard-view h3,
+.analytics-view h3 {
+  font-size: 13px;
+  margin: 0 0 4px;
+}
+
+.kpi-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.kpi-card {
+  background: color-mix(in srgb, Highlight 8%, Canvas);
+  border: 1px solid color-mix(in srgb, CanvasText 14%, Canvas);
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+}
+
+.kpi-value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.kpi-label {
+  color: color-mix(in srgb, CanvasText 60%, Canvas);
+  font-size: 12px;
+}
+
+.dashboard-grid-2 {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.activity-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.activity-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chart {
+  max-width: 100%;
+}
+
+.chart-label {
+  fill: currentColor;
+  font-size: 11px;
+}
+
+.chart-label-center {
+  text-anchor: middle;
+}
+
+.chart-value {
+  fill: currentColor;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.chart-axis {
+  stroke: color-mix(in srgb, CanvasText 25%, Canvas);
+  stroke-width: 1;
+}
+
+.chart-bar-fill {
+  fill: Highlight;
+}
+
+.chart-line-stroke {
+  fill: var(--chart-color);
+  stroke: var(--chart-color);
+  stroke-width: 2;
+}
+
+.chart-series-1 {
+  --chart-color: Highlight;
+}
+
+.chart-series-2 {
+  --chart-color: Mark;
+}
+
+.chart-series-3 {
+  --chart-color: color-mix(in srgb, Highlight 55%, CanvasText);
+}
+
+.chart-series-4 {
+  --chart-color: color-mix(in srgb, Mark 55%, CanvasText);
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chart-legend li {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.chart-legend-swatch {
+  background: var(--chart-color);
+  border-radius: 2px;
+  display: inline-block;
+  height: 10px;
+  width: 10px;
+}
+
+.donut-chart {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.backup-panel,
+.backup-panel fieldset {
+  display: grid;
+  gap: 10px;
+}
+
+.backup-panel {
+  max-width: 620px;
+}
+
+.backup-panel fieldset label {
+  align-items: start;
+  display: flex;
+  gap: 8px;
+}
+
+.file-button {
+  display: grid;
+  gap: 6px;
+}
+
+.status-message {
+  background: color-mix(in srgb, Highlight 8%, Canvas);
+  border-left: 3px solid Highlight;
+  padding: 8px 10px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
