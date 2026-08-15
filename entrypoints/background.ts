@@ -323,7 +323,7 @@ async function extractActiveTab(): Promise<ExtensionResponse> {
       tab.url ?? '',
     );
   } catch {
-    if (!isAutoScrapeUrl(tab.url ?? '')) {
+    if (!isAutoScrapeUrl(tab.url ?? '') && detection.platform !== 'direct') {
       return errorResponse(
         'STORAGE_FAILED',
         'Saved site templates could not be read. Reload the extension and try again.',
@@ -333,10 +333,12 @@ async function extractActiveTab(): Promise<ExtensionResponse> {
   }
 
   if (!isAutoScrapeUrl(tab.url ?? '') && matchingTemplates.length === 0) {
-    return errorResponse(
-      'DOMAIN_NOT_SUPPORTED',
-      'No automatic extractor or saved site template matches this page. Create a site template or enter the job manually.',
-    );
+    if (detection.platform !== 'direct') {
+      return errorResponse(
+        'DOMAIN_NOT_SUPPORTED',
+        'No automatic extractor or saved site template matches this page. Create a site template or enter the job manually.',
+      );
+    }
   }
 
   // Two-step injection: load the real bundled content-script file first (so

@@ -253,6 +253,29 @@ describe('background save flow', () => {
     );
   });
 
+  it('keeps generic auto-extraction available on job-like company URLs before a template exists', async () => {
+    browserMock.tabs.query.mockResolvedValue([
+      { id: 9, url: 'https://careers.newco.example/jobs/456' },
+    ]);
+    browserMock.scripting.executeScript.mockResolvedValue([
+      {
+        result: {
+          draft: { source_platform: 'direct', job_title: 'Generic result' },
+          candidates: {},
+        },
+      },
+    ]);
+    const { handleMessage } = await import('../../entrypoints/background');
+
+    await expect(
+      handleMessage({ type: 'EXTRACT_ACTIVE_TAB' }),
+    ).resolves.toMatchObject({
+      type: 'EXTRACT_ACTIVE_TAB_RESULT',
+      ok: true,
+      draft: { source_platform: 'direct', job_title: 'Generic result' },
+    });
+  });
+
   it('injects the user-triggered picker only into an active HTTP(S) tab', async () => {
     browserMock.tabs.query.mockResolvedValue([
       { id: 8, url: 'https://careers.example.com/jobs/123' },

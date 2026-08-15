@@ -150,8 +150,12 @@ function startTemplatePicker(): void {
     selecting = false;
     setHighlight(undefined);
     renderRules();
+    const preview = (target.textContent ?? target.getAttribute('href') ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 160);
     setStatus(
-      `Mapped ${selectedField.replaceAll('_', ' ')}. Choose another field or save.`,
+      `Mapped ${selectedField.replaceAll('_', ' ')}${preview ? `: “${preview}”` : ''}. Choose another field or save.`,
     );
     requiredElement<HTMLButtonElement>(shadow, '#pick').focus();
   }
