@@ -40,6 +40,7 @@ export function selectMatchingSiteTemplates(
       (a, b) =>
         b.priority - a.priority ||
         specificity(b.path_pattern) - specificity(a.path_pattern) ||
+        b.updated_at.localeCompare(a.updated_at) ||
         a.name.localeCompare(b.name),
     );
 }

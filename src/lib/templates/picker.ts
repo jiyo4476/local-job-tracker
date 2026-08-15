@@ -29,13 +29,18 @@ export function buildStableSelector(
 
   for (const attribute of STABLE_ATTRIBUTES) {
     const value = element.getAttribute(attribute);
-    if (!value || value.length > 200) continue;
+    if (!value || value.length > 200 || !looksStableToken(value, true))
+      continue;
     const selector = `${element.tagName.toLowerCase()}[${attribute}="${escapeAttribute(value)}"]`;
     if (isUnique(selector, element, root)) return selector;
   }
 
   const ariaLabel = element.getAttribute('aria-label');
-  if (ariaLabel && ariaLabel.length <= 200) {
+  if (
+    ariaLabel &&
+    ariaLabel.length <= 200 &&
+    looksStableToken(ariaLabel, true)
+  ) {
     const selector = `${element.tagName.toLowerCase()}[aria-label="${escapeAttribute(ariaLabel)}"]`;
     if (isUnique(selector, element, root)) return selector;
   }
@@ -200,9 +205,13 @@ function escapeAttribute(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
-function looksStableToken(value: string): boolean {
+function looksStableToken(value: string, allowSpaces = false): boolean {
+  const safeCharacters = allowSpaces
+    ? /^[a-zA-Z_][a-zA-Z0-9_. -]*$/
+    : /^[a-zA-Z_][a-zA-Z0-9_.-]*$/;
   return (
     value.length <= 100 &&
+    safeCharacters.test(value) &&
     !/[0-9a-f]{8}-[0-9a-f-]{20,}/i.test(value) &&
     !/\d{5,}/.test(value)
   );

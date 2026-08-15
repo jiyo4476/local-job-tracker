@@ -42,6 +42,23 @@ describe('site template engine', () => {
     ).toEqual([]);
   });
 
+  it('prefers a newly retaught template when priority and path specificity tie', () => {
+    const older = template({
+      name: 'Older',
+      updated_at: '2026-08-14T10:00:00.000Z',
+    });
+    const newer = template({
+      name: 'Newer',
+      updated_at: '2026-08-14T11:00:00.000Z',
+    });
+    expect(
+      selectMatchingSiteTemplates(
+        [older, newer],
+        'https://careers.acme.example/jobs/123',
+      )[0]?.name,
+    ).toBe('Newer');
+  });
+
   it('extracts bounded typed values and ignores invalid fields per rule', () => {
     document.body.innerHTML = `
       <h1> Senior Engineer </h1>
