@@ -11,6 +11,7 @@ import {
   type StoredJob,
 } from './schema';
 import { extensionSettingsSchema, type ExtensionSettings } from '../settings';
+import { siteTemplateSchema, type SiteTemplate } from '../templates/schema';
 
 const FUZZY_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -305,14 +306,26 @@ export async function importLocalDataset(
   jobs: StoredJob[],
   settings: ExtensionSettings,
   mode: 'replace' | 'merge' = 'merge',
+  templates: SiteTemplate[] = [],
 ): Promise<{ imported: number; skipped: number }> {
   const parsedJobs = jobs.map((job) => storedJobSchema.parse(job));
   const parsedSettings = extensionSettingsSchema.parse(settings);
+  const parsedTemplates = templates.map((template) =>
+    siteTemplateSchema.parse(template),
+  );
   const db = getDb();
-  return db.transaction('rw', db.jobs, db.settings, async () => {
+  return db.transaction('rw', db.jobs, db.settings, db.templates, async () => {
     const result = await importParsedJobs(parsedJobs, mode);
     if (mode === 'replace') {
       await db.settings.put({ key: 'extension', ...parsedSettings });
+      await db.templates.clear();
+      await db.templates.bulkAdd(parsedTemplates);
+    } else {
+      for (const template of parsedTemplates) {
+        if (!(await db.templates.get(template.id))) {
+          await db.templates.add(template);
+        }
+      }
     }
     return result;
   });

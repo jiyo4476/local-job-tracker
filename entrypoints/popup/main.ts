@@ -76,6 +76,8 @@ const statusEl = document.querySelector<HTMLDivElement>('#status');
 const form = document.querySelector<HTMLFormElement>('#job-form');
 const extractButton =
   document.querySelector<HTMLButtonElement>('#extract-button');
+const templateButton =
+  document.querySelector<HTMLButtonElement>('#template-button');
 const exportButton =
   document.querySelector<HTMLButtonElement>('#export-button');
 const saveButton = document.querySelector<HTMLButtonElement>('#save-button');
@@ -323,6 +325,10 @@ extractButton?.addEventListener('click', () => {
   void extractActiveTab();
 });
 
+templateButton?.addEventListener('click', () => {
+  void startTemplatePicker();
+});
+
 exportButton?.addEventListener('click', () => {
   exportJsonLd();
 });
@@ -407,6 +413,26 @@ async function extractActiveTab(): Promise<void> {
     );
   } finally {
     setBusy(false);
+  }
+}
+
+async function startTemplatePicker(): Promise<void> {
+  setStatus('Starting the element picker…', 'status');
+  try {
+    const rawResponse: unknown = await browser.runtime.sendMessage({
+      type: 'START_TEMPLATE_PICKER',
+    });
+    const response = extensionResponseSchema.parse(rawResponse);
+    if (!response.ok) {
+      setStatus(response.error.message, 'alert');
+      return;
+    }
+    setStatus(
+      'Element picker opened on the page. The popup may now close.',
+      'status',
+    );
+  } catch {
+    setStatus('Could not start the element picker on this page.', 'alert');
   }
 }
 
@@ -540,7 +566,12 @@ function renderResponse(response: ExtensionResponse): void {
     formRevision += 1;
     void persistCurrentDraft();
     renderCandidates(response.candidates);
-    setStatus('Review the extracted fields before saving.', 'status');
+    setStatus(
+      response.applied_template
+        ? `Applied site template “${response.applied_template.name}”. Review the extracted fields before saving.`
+        : 'Review the extracted fields before saving.',
+      'status',
+    );
     return;
   }
 
@@ -834,6 +865,7 @@ function setBusy(disabled: boolean): void {
       el.disabled = disabled;
     });
   setExtractDisabled(disabled);
+  if (templateButton) templateButton.disabled = disabled;
   setExportDisabled(disabled);
   setSaveDisabled(disabled);
 }

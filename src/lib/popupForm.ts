@@ -302,7 +302,13 @@ function isValidUrl(value: string): boolean {
 // --- candidate review mode ---------------------------------------------------
 
 export type ExtractionCandidateSource =
-  'jsonld' | 'dom' | 'meta' | 'visible-text' | 'url' | 'description';
+  | 'jsonld'
+  | 'dom'
+  | 'meta'
+  | 'visible-text'
+  | 'url'
+  | 'description'
+  | 'template';
 
 export const CANDIDATE_SOURCE_LABELS: Record<
   ExtractionCandidateSource,
@@ -314,6 +320,7 @@ export const CANDIDATE_SOURCE_LABELS: Record<
   'visible-text': 'From page text',
   url: 'From URL',
   description: 'From description scan',
+  template: 'From site template',
 };
 
 export function formatCandidateValue(value: unknown): string {

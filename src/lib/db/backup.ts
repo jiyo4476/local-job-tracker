@@ -3,9 +3,11 @@ import { z } from 'zod';
 import { extensionSettingsSchema, getSettings } from '../settings';
 import { exportAllJobs, importLocalDataset } from './jobsRepo';
 import { jobContactSchema, storedJobSchema } from './schema';
+import { listSiteTemplates } from '../templates/repo';
+import { MAX_SITE_TEMPLATES, siteTemplateSchema } from '../templates/schema';
 
 export const BACKUP_FORMAT = 'job-tracker-backup';
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 export const MAX_BACKUP_JOBS = 100_000;
 
 const backupJobSchema = storedJobSchema
@@ -15,6 +17,22 @@ const backupJobSchema = storedJobSchema
   .strict();
 const backupSettingsSchema = extensionSettingsSchema.strict();
 const jobsSchema = z.array(backupJobSchema).max(MAX_BACKUP_JOBS);
+const templatesSchema = z
+  .array(siteTemplateSchema)
+  .max(MAX_SITE_TEMPLATES)
+  .superRefine((templates, context) => {
+    const ids = new Set<string>();
+    templates.forEach((template, index) => {
+      if (ids.has(template.id)) {
+        context.addIssue({
+          code: 'custom',
+          path: [index, 'id'],
+          message: `Duplicate template id ${template.id}.`,
+        });
+      }
+      ids.add(template.id);
+    });
+  });
 
 function rejectDuplicateJobs(
   jobs: z.infer<typeof jobsSchema>,
@@ -50,13 +68,27 @@ const backupSchema = z
     exported_at: z.string().datetime(),
     jobs: jobsSchema,
     settings: backupSettingsSchema,
+    templates: templatesSchema,
   })
   .strict()
   .superRefine(({ jobs }, context) => {
     rejectDuplicateJobs(jobs, context);
   });
 
-const legacyBackupSchema = z
+const versionTwoBackupSchema = z
+  .object({
+    format: z.literal(BACKUP_FORMAT),
+    version: z.literal(2),
+    exported_at: z.string().datetime(),
+    jobs: jobsSchema,
+    settings: backupSettingsSchema,
+  })
+  .strict()
+  .superRefine(({ jobs }, context) => {
+    rejectDuplicateJobs(jobs, context);
+  });
+
+const versionOneBackupSchema = z
   .object({
     format: z.literal(BACKUP_FORMAT),
     version: z.literal(1),
@@ -72,13 +104,18 @@ export type JobTrackerBackup = z.infer<typeof backupSchema>;
 export type ImportMode = 'merge' | 'replace';
 
 export async function createBackup(): Promise<JobTrackerBackup> {
-  const [jobs, settings] = await Promise.all([exportAllJobs(), getSettings()]);
+  const [jobs, settings, templates] = await Promise.all([
+    exportAllJobs(),
+    getSettings(),
+    listSiteTemplates(),
+  ]);
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exported_at: new Date().toISOString(),
     jobs,
     settings,
+    templates,
   };
 }
 
@@ -95,12 +132,21 @@ export function parseBackupJson(value: string): JobTrackerBackup {
   }
   const parsed = backupSchema.safeParse(decoded);
   if (!parsed.success) {
-    const legacy = legacyBackupSchema.safeParse(decoded);
-    if (legacy.success) {
+    const versionTwo = versionTwoBackupSchema.safeParse(decoded);
+    if (versionTwo.success) {
       return {
-        ...legacy.data,
+        ...versionTwo.data,
+        version: BACKUP_VERSION,
+        templates: [],
+      };
+    }
+    const versionOne = versionOneBackupSchema.safeParse(decoded);
+    if (versionOne.success) {
+      return {
+        ...versionOne.data,
         version: BACKUP_VERSION,
         settings: extensionSettingsSchema.parse({}),
+        templates: [],
       };
     }
   }
@@ -119,5 +165,10 @@ export async function restoreBackup(
   mode: ImportMode,
 ): Promise<{ imported: number; skipped: number }> {
   const validated = backupSchema.parse(backup);
-  return importLocalDataset(validated.jobs, validated.settings, mode);
+  return importLocalDataset(
+    validated.jobs,
+    validated.settings,
+    mode,
+    validated.templates,
+  );
 }

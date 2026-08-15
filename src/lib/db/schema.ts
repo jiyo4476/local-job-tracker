@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from 'dexie';
 import { z } from 'zod';
 
 import { httpUrlSchema, jobDraftSchema, scrapePayloadSchema } from '../schemas';
+import type { SiteTemplate } from '../templates/schema';
 
 export const interviewStageSchema = z.enum([
   'not_applied',
@@ -80,6 +81,7 @@ export type NewJobInput = z.infer<typeof newJobInputSchema>;
 export class JobTrackerDatabase extends Dexie {
   jobs!: EntityTable<StoredJob, 'id'>;
   settings!: EntityTable<StoredSettings, 'key'>;
+  templates!: EntityTable<SiteTemplate, 'id'>;
 
   constructor(name = 'job-tracker') {
     super(name);
@@ -101,6 +103,11 @@ export class JobTrackerDatabase extends Dexie {
             job.contacts ??= [];
           });
       });
+    this.version(3).stores({
+      jobs: '++id, &[source_platform+external_job_id], company_name, job_title, interview_stage, source_platform, is_active, created_at',
+      settings: '&key',
+      templates: '&id, hostname, enabled, priority, updated_at',
+    });
   }
 }
 

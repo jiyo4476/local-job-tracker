@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { getJob, listJobs, updateJob, upsertJob } from './jobsRepo';
 import { resetDbForTests } from './schema';
 import { getSettings, saveSettings } from '../settings';
+import { listSiteTemplates, saveSiteTemplate } from '../templates/repo';
 import {
   createBackup,
   parseBackupJson,
@@ -37,6 +38,20 @@ async function seed() {
       },
     ],
   });
+  await saveSiteTemplate({
+    id: '223e4567-e89b-42d3-a456-426614174000',
+    name: 'Backup careers template',
+    hostname: 'careers.example.com',
+    path_pattern: '/jobs/*',
+    rules: [
+      {
+        field: 'job_title',
+        selector: 'h1',
+        attribute: 'text',
+        transforms: ['trim'],
+      },
+    ],
+  });
   return saved;
 }
 
@@ -56,6 +71,12 @@ describe('full dataset backup', () => {
     );
     expect((await getJob(saved.id))?.contacts[0]?.name).toBe('Ada Recruiter');
     expect(await getSettings()).toEqual({ autoDetect: false });
+    expect(await listSiteTemplates()).toMatchObject([
+      {
+        id: '223e4567-e89b-42d3-a456-426614174000',
+        hostname: 'careers.example.com',
+      },
+    ]);
   });
 
   it('rejects malformed records before replace can erase local data', async () => {
@@ -95,8 +116,25 @@ describe('full dataset backup', () => {
         jobs: current.jobs,
       }),
     );
-    expect(migrated.version).toBe(2);
+    expect(migrated.version).toBe(3);
     expect(migrated.settings).toEqual({ autoDetect: true });
+    expect(migrated.templates).toEqual([]);
+  });
+
+  it('migrates a version 2 jobs-and-settings backup without templates', async () => {
+    await seed();
+    const current = await createBackup();
+    const migrated = parseBackupJson(
+      JSON.stringify({
+        format: current.format,
+        version: 2,
+        exported_at: current.exported_at,
+        jobs: current.jobs,
+        settings: current.settings,
+      }),
+    );
+    expect(migrated.version).toBe(3);
+    expect(migrated.templates).toEqual([]);
   });
 
   it('rejects unknown envelope fields', () => {
@@ -132,6 +170,15 @@ describe('full dataset backup', () => {
         ],
       },
       { ...backup, settings: { ...backup.settings, unknown_setting: true } },
+      {
+        ...backup,
+        templates: [
+          {
+            ...backup.templates[0],
+            rules: [{ ...backup.templates[0]?.rules[0], unexpected: true }],
+          },
+        ],
+      },
     ]) {
       expect(() => parseBackupJson(JSON.stringify(invalid))).toThrow(
         'Invalid backup',
@@ -152,6 +199,18 @@ describe('full dataset backup', () => {
         }),
       ),
     ).toThrow('Duplicate platform and external job id');
+  });
+
+  it('rejects duplicate template ids within an incoming backup', async () => {
+    await seed();
+    const backup = await createBackup();
+    const template = backup.templates[0];
+    expect(template).toBeDefined();
+    expect(() =>
+      parseBackupJson(
+        JSON.stringify({ ...backup, templates: [template, template] }),
+      ),
+    ).toThrow('Duplicate template id');
   });
 
   it('merges without overwriting an existing identity', async () => {

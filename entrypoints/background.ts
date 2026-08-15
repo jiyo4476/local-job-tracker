@@ -13,7 +13,11 @@ import {
   isAutoScrapeUrl,
 } from '../src/lib/extraction/detectPlatform';
 import type { extractJobDraft } from '../src/lib/extraction/jobDraftExtractor';
+import { listSiteTemplates, saveSiteTemplate } from '../src/lib/templates/repo';
+import { selectMatchingSiteTemplates } from '../src/lib/templates/engine';
+import type { SiteTemplate } from '../src/lib/templates/schema';
 import { JOB_DRAFT_EXTRACTOR_BRIDGE_KEY } from '../src/lib/extraction/jobDraftExtractorBridge';
+import { TEMPLATE_PICKER_BRIDGE_KEY } from '../src/lib/templates/pickerBridge';
 import { buildScrapePayload } from '../src/lib/payload';
 import {
   clearPopupDraft,
@@ -110,10 +114,73 @@ export async function handleMessage(
     return removePopupDraft(message.context);
   }
 
+  if (message.type === 'START_TEMPLATE_PICKER') {
+    return startTemplatePicker();
+  }
+
+  if (message.type === 'SAVE_SITE_TEMPLATE') {
+    try {
+      const template = await saveSiteTemplate(message.template);
+      return { type: 'SAVE_SITE_TEMPLATE_RESULT', ok: true, template };
+    } catch {
+      return errorResponse(
+        'STORAGE_FAILED',
+        'The site template could not be saved locally. Keep the picker open and try again.',
+      );
+    }
+  }
+
   return errorResponse(
     'MESSAGE_UNHANDLED',
     'No handler is available for this action.',
   );
+}
+
+async function startTemplatePicker(): Promise<ExtensionResponse> {
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !tab.url) {
+    return errorResponse('TAB_NOT_FOUND', 'No active web page is available.');
+  }
+  let url: URL;
+  try {
+    url = new URL(tab.url);
+  } catch {
+    return errorResponse(
+      'DOMAIN_NOT_SUPPORTED',
+      'Open an HTTP(S) job page first.',
+    );
+  }
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return errorResponse(
+      'DOMAIN_NOT_SUPPORTED',
+      'Open an HTTP(S) job page first.',
+    );
+  }
+
+  try {
+    await browser.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['/content-scripts/template-picker.js'],
+    });
+    const invokePicker = (bridgeKey: string) => {
+      const start = (window as unknown as Record<string, unknown>)[
+        bridgeKey
+      ] as (() => void) | undefined;
+      if (!start) throw new Error('Template picker bridge was not loaded.');
+      start();
+    };
+    await browser.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: invokePicker,
+      args: [TEMPLATE_PICKER_BRIDGE_KEY],
+    });
+    return { type: 'START_TEMPLATE_PICKER_RESULT', ok: true };
+  } catch {
+    return errorResponse(
+      'EXTRACT_FAILED',
+      'Could not start the element picker on this page. Reload it and try again.',
+    );
+  }
 }
 
 async function readPopupDraft(
@@ -248,14 +315,29 @@ async function extractActiveTab(): Promise<ExtensionResponse> {
     return errorResponse('TAB_NOT_FOUND', 'No active tab is available.');
   }
 
-  if (!isAutoScrapeUrl(tab.url ?? '')) {
-    return errorResponse(
-      'DOMAIN_NOT_SUPPORTED',
-      'Open a specific job posting on LinkedIn, Indeed, Glassdoor, Dice, Greenhouse, Lever, Workday, Wellfound, or Built In before scanning.',
+  const detection = detectPlatform(tab.url ?? '');
+  let matchingTemplates: SiteTemplate[];
+  try {
+    matchingTemplates = selectMatchingSiteTemplates(
+      await listSiteTemplates(),
+      tab.url ?? '',
     );
+  } catch {
+    if (!isAutoScrapeUrl(tab.url ?? '')) {
+      return errorResponse(
+        'STORAGE_FAILED',
+        'Saved site templates could not be read. Reload the extension and try again.',
+      );
+    }
+    matchingTemplates = [];
   }
 
-  const detection = detectPlatform(tab.url ?? '');
+  if (!isAutoScrapeUrl(tab.url ?? '') && matchingTemplates.length === 0) {
+    return errorResponse(
+      'DOMAIN_NOT_SUPPORTED',
+      'No automatic extractor or saved site template matches this page. Create a site template or enter the job manually.',
+    );
+  }
 
   // Two-step injection: load the real bundled content-script file first (so
   // its `dompurify`/`turndown` imports actually resolve), then run a
@@ -280,18 +362,19 @@ async function extractActiveTab(): Promise<ExtensionResponse> {
   const callBridgedExtractor = (
     bridgeKey: string,
     detectionArg: typeof detection,
+    templatesArg: typeof matchingTemplates,
   ) => {
     const extract = (window as unknown as Record<string, unknown>)[
       bridgeKey
     ] as typeof extractJobDraft | undefined;
-    return extract?.(detectionArg);
+    return extract?.(detectionArg, templatesArg);
   };
 
   try {
     const [result] = await browser.scripting.executeScript({
       target: { tabId: tab.id },
       func: callBridgedExtractor,
-      args: [JOB_DRAFT_EXTRACTOR_BRIDGE_KEY, detection],
+      args: [JOB_DRAFT_EXTRACTOR_BRIDGE_KEY, detection, matchingTemplates],
     });
 
     const extraction = result?.result;
@@ -315,6 +398,9 @@ async function extractActiveTab(): Promise<ExtensionResponse> {
       ok: true,
       draft: parsedDraft.data,
       candidates: filterInvalidCandidates(extraction.candidates),
+      ...(extraction.appliedTemplate
+        ? { applied_template: extraction.appliedTemplate }
+        : {}),
     };
   } catch {
     return errorResponse(

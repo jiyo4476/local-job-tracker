@@ -3,6 +3,7 @@ import { popupDraftContextSchema } from './popupDraft';
 import { popupFormValuesSchema } from './popupForm';
 import { publicSettingsSchema, publicSettingsUpdateSchema } from './settings';
 import { jobDraftSchema, scrapePayloadSchema } from './schemas';
+import { siteTemplateSchema } from './templates/schema';
 
 export const extensionErrorCodeSchema = z.enum([
   'MESSAGE_INVALID',
@@ -57,6 +58,15 @@ export const clearPopupDraftRequestSchema = z.object({
   context: popupDraftContextSchema,
 });
 
+export const startTemplatePickerRequestSchema = z.object({
+  type: z.literal('START_TEMPLATE_PICKER'),
+});
+
+export const saveSiteTemplateRequestSchema = z.object({
+  type: z.literal('SAVE_SITE_TEMPLATE'),
+  template: siteTemplateSchema,
+});
+
 export const extractionCandidateSchema = z.object({
   value: z.unknown(),
   // 'description' marks taxonomy values derived from scanning the selected
@@ -68,6 +78,7 @@ export const extractionCandidateSchema = z.object({
     'visible-text',
     'url',
     'description',
+    'template',
   ]),
   confidence: z.enum(['high', 'medium', 'low']),
 });
@@ -82,6 +93,9 @@ export const extractActiveTabResponseSchema = z.object({
   ok: z.literal(true),
   draft: jobDraftSchema,
   candidates: extractionCandidatesSchema.optional(),
+  applied_template: z
+    .object({ id: z.string().uuid(), name: z.string().min(1).max(120) })
+    .optional(),
 });
 
 export const saveJobResultSchema = z.object({
@@ -124,6 +138,17 @@ export const clearPopupDraftResponseSchema = z.object({
   ok: z.literal(true),
 });
 
+export const startTemplatePickerResponseSchema = z.object({
+  type: z.literal('START_TEMPLATE_PICKER_RESULT'),
+  ok: z.literal(true),
+});
+
+export const saveSiteTemplateResponseSchema = z.object({
+  type: z.literal('SAVE_SITE_TEMPLATE_RESULT'),
+  ok: z.literal(true),
+  template: siteTemplateSchema,
+});
+
 export const extensionErrorResponseSchema = z.object({
   type: z.literal('ERROR'),
   ok: z.literal(false),
@@ -138,6 +163,8 @@ export const extensionMessageSchema = z.discriminatedUnion('type', [
   getPopupDraftRequestSchema,
   savePopupDraftRequestSchema,
   clearPopupDraftRequestSchema,
+  startTemplatePickerRequestSchema,
+  saveSiteTemplateRequestSchema,
 ]);
 
 export const extensionResponseSchema = z.union([
@@ -148,6 +175,8 @@ export const extensionResponseSchema = z.union([
   getPopupDraftResponseSchema,
   savePopupDraftResponseSchema,
   clearPopupDraftResponseSchema,
+  startTemplatePickerResponseSchema,
+  saveSiteTemplateResponseSchema,
   extensionErrorResponseSchema,
 ]);
 
