@@ -58,6 +58,7 @@ export function executeSiteTemplate(
   if (template.selection) {
     const activeItem = findActiveItem(
       root,
+      template.selection.list_selector,
       template.selection.item_selector,
       template.selection.active_class,
     );
@@ -120,22 +121,42 @@ export function executeSiteTemplate(
 
 function findActiveItem(
   root: ParentNode,
+  listSelector: string | undefined,
   itemSelector: string,
   activeClass: string,
 ): Element | undefined {
-  let items: Element[];
+  let containers: ParentNode[];
   try {
-    items = [...root.querySelectorAll(itemSelector)].slice(0, MAX_RULE_MATCHES);
+    containers = listSelector
+      ? [...root.querySelectorAll(listSelector)]
+      : [root];
   } catch {
     return undefined;
   }
 
-  return items.find(
-    (item) =>
-      item.classList.contains(activeClass) ||
-      [...item.querySelectorAll('[class]')].some((descendant) =>
-        descendant.classList.contains(activeClass),
-      ),
+  let inspected = 0;
+  for (const container of containers) {
+    let items: Element[];
+    try {
+      items = [...container.querySelectorAll(itemSelector)];
+    } catch {
+      continue;
+    }
+    for (const item of items) {
+      if (inspected >= MAX_RULE_MATCHES) return undefined;
+      inspected += 1;
+      if (hasActiveClass(item, activeClass)) return item;
+    }
+  }
+  return undefined;
+}
+
+function hasActiveClass(item: Element, activeClass: string): boolean {
+  return (
+    item.classList.contains(activeClass) ||
+    [...item.querySelectorAll('[class]')].some((descendant) =>
+      descendant.classList.contains(activeClass),
+    )
   );
 }
 

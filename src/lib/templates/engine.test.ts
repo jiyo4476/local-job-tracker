@@ -180,6 +180,53 @@ describe('site template engine', () => {
     expect(result.values).toEqual({ job_title: 'Selected' });
   });
 
+  it('selects an item from each configured list when its first child is active', () => {
+    document.body.innerHTML = `
+      <ul class="jobs">
+        <li class="job-card"><span class="active-ish">Wrong</span><h2>Wrong A</h2></li>
+        <li class="job-card"><span class="active">Selected A</span><h2>Selected A</h2></li>
+      </ul>
+      <ul class="jobs">
+        <li class="job-card"><span class="active">Selected B</span><h2>Selected B</h2></li>
+      </ul>
+    `;
+    const result = executeSiteTemplate(
+      template({
+        selection: {
+          list_selector: 'ul.jobs',
+          item_selector: 'li.job-card',
+          active_class: 'active',
+        },
+        rules: [{ field: 'job_title', selector: 'h2' }],
+      }),
+      document,
+      'https://careers.acme.example/jobs/2',
+      () => '',
+    );
+    expect(result.values).toEqual({ job_title: 'Selected A' });
+  });
+
+  it('does not select an item from outside configured lists', () => {
+    document.body.innerHTML = `
+      <div class="outside"><li class="job-card"><h2>Outside</h2><span class="active"></span></li></div>
+      <ul class="jobs"><li class="job-card"><h2>Inside</h2></li></ul>
+    `;
+    const result = executeSiteTemplate(
+      template({
+        selection: {
+          list_selector: 'ul.jobs',
+          item_selector: 'li.job-card',
+          active_class: 'active',
+        },
+        rules: [{ field: 'job_title', selector: 'h2' }],
+      }),
+      document,
+      'https://careers.acme.example/jobs/2',
+      () => '',
+    );
+    expect(result.values).toEqual({});
+  });
+
   it('returns no values when a configured list has no active item', () => {
     document.body.innerHTML = `
       <article class="job-card"><h2>First</h2></article>
