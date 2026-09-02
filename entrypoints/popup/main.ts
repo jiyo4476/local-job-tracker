@@ -486,17 +486,25 @@ async function saveJob(
   clearFieldErrors();
   const pendingTagField = commitAllPendingTagInputs();
   if (pendingTagField) {
-    if (!options.auto) {
-      setStatus('Fix the highlighted fields before saving.', 'alert');
-    }
+    setStatus(
+      options.auto
+        ? 'Automatic save skipped: finish the highlighted tag before saving this matched job.'
+        : 'Fix the highlighted fields before saving.',
+      'alert',
+    );
     return;
   }
   const values = readFormValues();
   const errors = validateFormValues(values);
   if (errors.length > 0) {
+    renderFieldErrors(errors);
+    setStatus(
+      options.auto
+        ? 'Automatic save skipped: the matched template needs field corrections. Review the extracted draft, then save manually.'
+        : 'Fix the highlighted fields before saving.',
+      'alert',
+    );
     if (!options.auto) {
-      renderFieldErrors(errors);
-      setStatus('Fix the highlighted fields before saving.', 'alert');
       const invalidField = firstInvalidField(errors);
       if (invalidField) focusField(invalidField);
     }
