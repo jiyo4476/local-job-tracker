@@ -43,6 +43,8 @@ export type JobContact = z.infer<typeof jobContactSchema>;
 export interface StoredSettings {
   key: 'extension';
   autoDetect: boolean;
+  /** Optional so records written by pre-opt-in versions remain readable. */
+  autoDownloadTemplates?: boolean;
 }
 
 /**

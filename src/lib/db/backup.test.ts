@@ -70,7 +70,10 @@ describe('full dataset backup', () => {
       'Preserve this lifecycle data.',
     );
     expect((await getJob(saved.id))?.contacts[0]?.name).toBe('Ada Recruiter');
-    expect(await getSettings()).toEqual({ autoDetect: false });
+    expect(await getSettings()).toEqual({
+      autoDetect: false,
+      autoDownloadTemplates: false,
+    });
     expect(await listSiteTemplates()).toMatchObject([
       {
         id: '223e4567-e89b-42d3-a456-426614174000',
@@ -117,7 +120,10 @@ describe('full dataset backup', () => {
       }),
     );
     expect(migrated.version).toBe(3);
-    expect(migrated.settings).toEqual({ autoDetect: true });
+    expect(migrated.settings).toEqual({
+      autoDetect: true,
+      autoDownloadTemplates: false,
+    });
     expect(migrated.templates).toEqual([]);
   });
 

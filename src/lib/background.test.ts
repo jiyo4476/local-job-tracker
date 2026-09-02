@@ -148,7 +148,7 @@ describe('background save flow', () => {
     expect(response).toEqual({
       type: 'GET_SETTINGS_RESULT',
       ok: true,
-      settings: { autoDetect: true },
+      settings: { autoDetect: true, autoDownloadTemplates: false },
     });
   });
 

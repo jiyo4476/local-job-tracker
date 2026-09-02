@@ -106,8 +106,12 @@ export function JobDetailView({ id }: Props) {
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = jobMarkdownFilename(job);
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.remove();
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 0);
   };
 
   const toggleActive = async () => {

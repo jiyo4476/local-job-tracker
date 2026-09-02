@@ -26,6 +26,10 @@ async function loadSettings(): Promise<void> {
   }
 
   setChecked('#auto-detect', response.settings.autoDetect);
+  setChecked(
+    '#auto-download-templates',
+    response.settings.autoDownloadTemplates,
+  );
 }
 
 async function persistSettings(): Promise<void> {
@@ -33,6 +37,7 @@ async function persistSettings(): Promise<void> {
     type: 'SAVE_SETTINGS',
     settings: {
       autoDetect: getChecked('#auto-detect'),
+      autoDownloadTemplates: getChecked('#auto-download-templates'),
     },
   });
 

@@ -379,11 +379,14 @@ async function autoExtractIfEnabled(): Promise<void> {
   ) {
     const extraction = await extractActiveTab();
     // A matched site template means this URL is on the user's whitelist
-    // (hostname + path pattern, e.g. company.job/jobs/*): for those pages the
-    // template's whole purpose is a hands-off capture, so save and download
-    // the Markdown file immediately instead of waiting on a manual Save
-    // click. Any other page still stops at "review, then Save" as before.
-    if (extraction?.applied_template) {
+    // (hostname + path pattern, e.g. company.job/jobs/*). Automatic save and
+    // Markdown download remain a separate explicit opt-in because a template
+    // or salary conversion can still be wrong. Without that opt-in, the user
+    // reviews the extracted fields and saves manually.
+    if (
+      extraction?.applied_template &&
+      response.settings.autoDownloadTemplates
+    ) {
       await saveJob({
         auto: true,
         templateName: extraction.applied_template.name,

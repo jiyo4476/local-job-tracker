@@ -301,11 +301,25 @@ describe('export/import', () => {
     const exported = await exportAllJobs();
     await saveSettings({ autoDetect: false });
 
-    await importLocalDataset(exported, { autoDetect: true }, 'merge');
-    expect(await getSettings()).toEqual({ autoDetect: false });
+    await importLocalDataset(
+      exported,
+      { autoDetect: true, autoDownloadTemplates: false },
+      'merge',
+    );
+    expect(await getSettings()).toEqual({
+      autoDetect: false,
+      autoDownloadTemplates: false,
+    });
 
-    await importLocalDataset(exported, { autoDetect: true }, 'replace');
-    expect(await getSettings()).toEqual({ autoDetect: true });
+    await importLocalDataset(
+      exported,
+      { autoDetect: true, autoDownloadTemplates: false },
+      'replace',
+    );
+    expect(await getSettings()).toEqual({
+      autoDetect: true,
+      autoDownloadTemplates: false,
+    });
     expect(await listJobs()).toHaveLength(1);
   });
 });
