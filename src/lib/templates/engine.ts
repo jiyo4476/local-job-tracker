@@ -54,10 +54,27 @@ export function executeSiteTemplate(
   const template = siteTemplateSchema.parse(rawTemplate);
   const values: Record<string, unknown> = {};
 
+  let extractionRoot: ParentNode = root;
+  if (template.selection) {
+    const activeItem = findActiveItem(
+      root,
+      template.selection.item_selector,
+      template.selection.active_class,
+    );
+    if (!activeItem) {
+      return {
+        templateId: template.id,
+        templateName: template.name,
+        values: {},
+      };
+    }
+    extractionRoot = activeItem;
+  }
+
   for (const rule of template.rules) {
     let elements: Element[];
     try {
-      elements = [...root.querySelectorAll(rule.selector)].slice(
+      elements = [...extractionRoot.querySelectorAll(rule.selector)].slice(
         0,
         MAX_RULE_MATCHES,
       );
@@ -99,6 +116,27 @@ export function executeSiteTemplate(
     templateName: template.name,
     values: parsed,
   };
+}
+
+function findActiveItem(
+  root: ParentNode,
+  itemSelector: string,
+  activeClass: string,
+): Element | undefined {
+  let items: Element[];
+  try {
+    items = [...root.querySelectorAll(itemSelector)].slice(0, MAX_RULE_MATCHES);
+  } catch {
+    return undefined;
+  }
+
+  return items.find(
+    (item) =>
+      item.classList.contains(activeClass) ||
+      [...item.querySelectorAll('[class]')].some((descendant) =>
+        descendant.classList.contains(activeClass),
+      ),
+  );
 }
 
 function applyRule(

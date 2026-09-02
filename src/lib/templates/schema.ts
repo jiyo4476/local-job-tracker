@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const MAX_SITE_TEMPLATES = 500;
 export const MAX_TEMPLATE_RULES = 40;
 export const MAX_SELECTOR_LENGTH = 500;
+export const MAX_ACTIVE_CLASS_LENGTH = 100;
 
 export const templateFieldSchema = z.enum([
   'external_job_id',
@@ -123,6 +124,28 @@ const pathPatternSchema = z
     'Path pattern supports single * wildcards and cannot include query/hash.',
   );
 
+const activeClassSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_ACTIVE_CLASS_LENGTH)
+  .refine(
+    (value) => /^[a-zA-Z0-9_-]+$/.test(value),
+    'Active class must be a single bounded CSS class token.',
+  );
+
+const templateSelectionSchema = z
+  .object({
+    item_selector: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX_SELECTOR_LENGTH)
+      .refine(isBoundedSelector, 'Selector contains unsupported syntax.'),
+    active_class: activeClassSchema,
+  })
+  .strict();
+
 export const siteTemplateSchema = z
   .object({
     id: z
@@ -134,6 +157,7 @@ export const siteTemplateSchema = z
     path_pattern: pathPatternSchema,
     enabled: z.boolean().default(true),
     priority: z.number().int().min(0).max(100).default(50),
+    selection: templateSelectionSchema.optional(),
     rules: z.array(siteTemplateRuleSchema).min(1).max(MAX_TEMPLATE_RULES),
     created_at: z
       .string()

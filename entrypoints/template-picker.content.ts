@@ -58,6 +58,9 @@ function startTemplatePicker(): void {
       <p>Select a field, then choose its visible element on the page. Press Escape to cancel selection or close the picker.</p>
       <label>Template name <input id="name" maxlength="120" /></label>
       <label>Matching path <input id="path" maxlength="500" /></label>
+      <p>Optional list selection: limit extraction to the active item in a repeated job list.</p>
+      <label>List item selector <input id="item-selector" maxlength="500" placeholder="li.job-card" /></label>
+      <label>Active item class <input id="active-class" maxlength="100" placeholder="vjs-highlight" /></label>
       <label>Job field <select id="field"></select></label>
       <label>Capture <select id="capture"></select></label>
       <div class="actions">
@@ -229,6 +232,19 @@ function startTemplatePicker(): void {
         }
         try {
           const timestamp = new Date().toISOString();
+          const itemSelector = requiredElement<HTMLInputElement>(
+            shadow,
+            '#item-selector',
+          ).value.trim();
+          const activeClass = requiredElement<HTMLInputElement>(
+            shadow,
+            '#active-class',
+          ).value.trim();
+          if (Boolean(itemSelector) !== Boolean(activeClass)) {
+            throw new Error(
+              'Enter both the list item selector and active item class, or leave both blank.',
+            );
+          }
           const template = siteTemplateSchema.parse({
             id: crypto.randomUUID(),
             name: requiredElement<HTMLInputElement>(shadow, '#name').value,
@@ -238,6 +254,14 @@ function startTemplatePicker(): void {
             enabled: true,
             priority: 50,
             rules: [...rules.values()],
+            ...(itemSelector && activeClass
+              ? {
+                  selection: {
+                    item_selector: itemSelector,
+                    active_class: activeClass,
+                  },
+                }
+              : {}),
             created_at: timestamp,
             updated_at: timestamp,
           });
