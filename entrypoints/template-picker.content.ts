@@ -4,7 +4,9 @@ import { extensionResponseSchema } from '../src/lib/messages';
 import {
   buildStableSelector,
   inferTemplateRule,
+  PICKER_CAPTURE_MODES,
   PICKER_FIELDS,
+  type PickerCaptureMode,
   suggestPathPattern,
 } from '../src/lib/templates/picker';
 import { TEMPLATE_PICKER_BRIDGE_KEY } from '../src/lib/templates/pickerBridge';
@@ -57,6 +59,7 @@ function startTemplatePicker(): void {
       <label>Template name <input id="name" maxlength="120" /></label>
       <label>Matching path <input id="path" maxlength="500" /></label>
       <label>Job field <select id="field"></select></label>
+      <label>Capture <select id="capture"></select></label>
       <div class="actions">
         <button id="pick" type="button" class="primary">Select page element</button>
         <button id="save" type="button">Save template</button>
@@ -74,6 +77,18 @@ function startTemplatePicker(): void {
     option.value = optionValue;
     option.textContent = optionValue.replaceAll('_', ' ');
     field.append(option);
+  }
+  const capture = requiredElement<HTMLSelectElement>(shadow, '#capture');
+  for (const mode of PICKER_CAPTURE_MODES) {
+    const option = document.createElement('option');
+    option.value = mode;
+    option.textContent =
+      mode === 'link'
+        ? 'Link URL'
+        : mode === 'link_text'
+          ? 'Link text'
+          : 'Element text';
+    capture.append(option);
   }
   requiredElement<HTMLInputElement>(shadow, '#name').value =
     `${location.hostname} jobs`;
@@ -138,6 +153,17 @@ function startTemplatePicker(): void {
     const target = event.target;
     if (!(target instanceof Element)) return;
     const selectedField = field.value as (typeof PICKER_FIELDS)[number];
+    const captureMode = capture.value as PickerCaptureMode;
+    if (
+      captureMode === 'link' &&
+      !target.closest('a[href], button[formaction], [data-href], [data-url]')
+    ) {
+      setStatus(
+        'That element does not expose a link URL. Select an anchor or a button/link with a URL attribute.',
+        true,
+      );
+      return;
+    }
     const selector = buildStableSelector(target);
     if (!selector) {
       setStatus('Could not create a stable selector for that element.', true);
@@ -145,15 +171,23 @@ function startTemplatePicker(): void {
     }
     rules.set(
       selectedField,
-      inferTemplateRule(selectedField, target, selector),
+      inferTemplateRule(selectedField, target, selector, captureMode),
     );
     selecting = false;
     setHighlight(undefined);
     renderRules();
-    const preview = (target.textContent ?? target.getAttribute('href') ?? '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 160);
+    const linkTarget = target.closest(
+      'a[href], button[formaction], [data-href], [data-url]',
+    );
+    const previewSource =
+      captureMode === 'link'
+        ? (linkTarget?.getAttribute('href') ??
+          linkTarget?.getAttribute('formaction') ??
+          linkTarget?.getAttribute('data-href') ??
+          linkTarget?.getAttribute('data-url') ??
+          '')
+        : (linkTarget?.textContent ?? target.textContent ?? '');
+    const preview = previewSource.replace(/\s+/g, ' ').trim().slice(0, 160);
     setStatus(
       `Mapped ${selectedField.replaceAll('_', ' ')}${preview ? `: “${preview}”` : ''}. Choose another field or save.`,
     );

@@ -44,6 +44,12 @@ const popupDraftContexts = new Map<
 let nextPopupDraftGeneration = 1;
 
 export default defineBackground(() => {
+  browser.action?.onClicked?.addListener((tab) => {
+    const windowId = tab.windowId;
+    if (windowId === undefined || !browser.sidePanel) return;
+    void browser.sidePanel.open({ windowId }).catch(() => undefined);
+  });
+
   browser.runtime.onMessage.addListener((message: unknown) => {
     const parsed = extensionMessageSchema.safeParse(message);
     if (!parsed.success) {

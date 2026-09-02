@@ -44,4 +44,35 @@ describe('template element picker utilities', () => {
       },
     );
   });
+
+  it('can capture an anchor URL separately from its visible text', () => {
+    document.body.innerHTML =
+      '<a id="apply" href="/jobs/123"><span>Apply now</span></a>';
+    const text = document.querySelector('span');
+    expect(
+      text && inferTemplateRule('job_title', text, 'span', 'link_text'),
+    ).toMatchObject({
+      selector: '#apply',
+      attribute: 'text',
+    });
+    expect(
+      text && inferTemplateRule('job_link', text, 'span', 'link'),
+    ).toMatchObject({
+      selector: '#apply',
+      attribute: 'href',
+      transforms: ['absolute_url'],
+    });
+  });
+
+  it('supports URL-bearing buttons without executing page handlers', () => {
+    document.body.innerHTML =
+      '<button id="apply" data-href="/jobs/123">Apply</button>';
+    const button = document.querySelector('button');
+    expect(
+      button && inferTemplateRule('job_link', button, '#apply', 'link'),
+    ).toMatchObject({
+      attribute: 'data-href',
+      transforms: ['absolute_url'],
+    });
+  });
 });

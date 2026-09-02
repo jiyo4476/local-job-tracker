@@ -43,7 +43,7 @@ describe('draftToFormValues / formValuesToDraft', () => {
     const values = draftToFormValues(fullDraft);
     expect(values.job_title).toBe('Software Engineer');
     expect(values.skills).toBe('TypeScript, React');
-    expect(values.salary_min).toBe('10000000');
+    expect(values.salary_min).toBe('100000');
     expect(values.is_remote).toBe(true);
 
     expect(formValuesToDraft(values)).toEqual(fullDraft);
@@ -104,8 +104,18 @@ describe('draftToFormValues / formValuesToDraft', () => {
       salary_max: '',
     });
 
-    expect(draft.salary_min).toBe(5000);
+    // salary_min/salary_max are entered as dollars and stored as cents.
+    expect(draft.salary_min).toBe(500_000);
     expect(draft).not.toHaveProperty('salary_max');
+  });
+
+  it('converts dollar-denominated salary input to integer cents', () => {
+    const draft = formValuesToDraft({
+      ...emptyFormValues(),
+      salary_min: '120000.5',
+    });
+
+    expect(draft.salary_min).toBe(12_000_050);
   });
 
   it('defaults source_platform to other when unset', () => {

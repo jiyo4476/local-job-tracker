@@ -16,6 +16,10 @@ import {
 } from '../../lib/db/schema';
 import { errorMessage, useAsyncResource } from '../useAsyncResource';
 import { MAX_CONTACTS, validateContact } from './contactsModel';
+import {
+  buildJobMarkdown,
+  jobMarkdownFilename,
+} from '../../lib/markdownExport';
 
 const STAGES = interviewStageSchema.options;
 
@@ -92,6 +96,18 @@ export function JobDetailView({ id }: Props) {
         error instanceof Error ? error.message : 'Could not save changes.',
       );
     }
+  };
+
+  const downloadMarkdown = () => {
+    const blob = new Blob([buildJobMarkdown(job)], {
+      type: 'text/markdown;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = jobMarkdownFilename(job);
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
 
   const toggleActive = async () => {
@@ -275,6 +291,9 @@ export function JobDetailView({ id }: Props) {
           >
           <button type="button" onClick=${toggleActive}>
             ${job.is_active ? 'Deactivate' : 'Restore'}
+          </button>
+          <button type="button" onClick=${downloadMarkdown}>
+            Download as Markdown
           </button>
         </div>
         ${

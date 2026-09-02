@@ -9,6 +9,9 @@ const STABLE_ATTRIBUTES = [
 
 export const PICKER_FIELDS = templateFieldSchema.options;
 
+export const PICKER_CAPTURE_MODES = ['text', 'link', 'link_text'] as const;
+export type PickerCaptureMode = (typeof PICKER_CAPTURE_MODES)[number];
+
 export function suggestPathPattern(rawUrl: string): string {
   const url = new URL(rawUrl);
   const segments = url.pathname.split('/').filter(Boolean);
@@ -77,6 +80,7 @@ export function inferTemplateRule(
   field: (typeof PICKER_FIELDS)[number],
   element: Element,
   selector: string,
+  captureMode: PickerCaptureMode = 'text',
 ): SiteTemplateRule {
   if (field === 'external_job_id' && element.hasAttribute('data-job-id')) {
     return {
@@ -87,14 +91,46 @@ export function inferTemplateRule(
       transforms: ['trim'],
     };
   }
-  if (field === 'job_link') {
-    const link = element.closest('a[href]');
+  if (captureMode === 'link') {
+    const link = findLinkTarget(element);
+    if (!link) {
+      return {
+        field,
+        selector,
+        attribute: 'text',
+        multiple: false,
+        transforms: ['trim'],
+      };
+    }
     return {
       field,
       selector: link ? buildStableSelector(link) : selector,
-      attribute: 'href',
+      attribute: linkAttribute(link),
       multiple: false,
       transforms: ['absolute_url'],
+    };
+  }
+  if (field === 'job_link') {
+    const link = findLinkTarget(element);
+    return {
+      field,
+      selector: link ? buildStableSelector(link) : selector,
+      attribute: link ? linkAttribute(link) : 'href',
+      multiple: false,
+      transforms: ['absolute_url'],
+    };
+  }
+  if (captureMode === 'link_text') {
+    const link = findLinkTarget(element);
+    return {
+      field,
+      selector: link ? buildStableSelector(link) : selector,
+      attribute: 'text',
+      multiple: false,
+      transforms:
+        field === 'job_description'
+          ? ['safe_markdown']
+          : ['trim', 'collapse_whitespace'],
     };
   }
   if (field === 'date_posted' && element.hasAttribute('datetime')) {
@@ -180,6 +216,19 @@ export function inferTemplateRule(
     multiple: false,
     transforms: ['trim', 'collapse_whitespace'],
   };
+}
+
+function findLinkTarget(element: Element): Element | null {
+  return element.closest(
+    'a[href], button[formaction], [data-href], [data-url]',
+  );
+}
+
+function linkAttribute(element: Element): SiteTemplateRule['attribute'] {
+  if (element.hasAttribute('href')) return 'href';
+  if (element.hasAttribute('formaction')) return 'formaction';
+  if (element.hasAttribute('data-href')) return 'data-href';
+  return 'data-url';
 }
 
 function isUnique(

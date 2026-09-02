@@ -35,6 +35,9 @@ export const templateAttributeSchema = z.enum([
   'datetime',
   'aria-label',
   'data-job-id',
+  'formaction',
+  'data-href',
+  'data-url',
 ]);
 
 export const templateTransformSchema = z.enum([

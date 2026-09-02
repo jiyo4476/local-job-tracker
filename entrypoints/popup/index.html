@@ -137,9 +137,19 @@
             hidden
           ></div>
 
-          <details id="advanced-fields">
-            <summary>Advanced fields</summary>
-            <div class="settings-section">
+          <section
+            class="advanced-fields"
+            aria-labelledby="advanced-fields-toggle"
+          >
+            <button
+              id="advanced-fields-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="advanced-fields-content"
+            >
+              Advanced fields
+            </button>
+            <div id="advanced-fields-content" class="settings-section" hidden>
               <label for="external-job-id">
                 External ID
                 <input
@@ -212,14 +222,14 @@
               </label>
 
               <label for="salary-min">
-                Minimum salary (cents)
+                Minimum salary ($)
                 <input
                   id="salary-min"
                   name="salary_min"
                   type="number"
                   min="0"
-                  step="1"
-                  inputmode="numeric"
+                  step="0.01"
+                  inputmode="decimal"
                   aria-describedby="error-salary_min"
                 />
               </label>
@@ -231,14 +241,14 @@
               ></div>
 
               <label for="salary-max">
-                Maximum salary (cents)
+                Maximum salary ($)
                 <input
                   id="salary-max"
                   name="salary_max"
                   type="number"
                   min="0"
-                  step="1"
-                  inputmode="numeric"
+                  step="0.01"
+                  inputmode="decimal"
                   aria-describedby="error-salary_max"
                 />
               </label>
@@ -301,7 +311,7 @@
               -->
               <div id="taxonomy-groups" class="taxonomy-groups"></div>
             </div>
-          </details>
+          </section>
         </form>
 
         <footer>
