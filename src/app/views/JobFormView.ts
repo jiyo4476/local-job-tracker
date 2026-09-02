@@ -197,6 +197,8 @@ export function JobFormView({ mode, id }: Props) {
           Link
           <input
             value=${values.job_link}
+            aria-invalid=${errorFor('job_link') ? 'true' : undefined}
+            aria-describedby=${errorFor('job_link') ? 'error-job_link' : undefined}
             onInput=${(event: Event) => {
               setField('job_link', (event.target as HTMLInputElement).value);
             }}
@@ -204,7 +206,9 @@ export function JobFormView({ mode, id }: Props) {
         </label>
         ${
           errorFor('job_link')
-            ? html`<div class="field-error">${errorFor('job_link')}</div>`
+            ? html`<div id="error-job_link" role="alert" class="field-error">
+                ${errorFor('job_link')}
+              </div>`
             : null
         }
         <label>
@@ -275,6 +279,8 @@ export function JobFormView({ mode, id }: Props) {
           <input
             type="date"
             value=${values.date_posted}
+            aria-invalid=${errorFor('date_posted') ? 'true' : undefined}
+            aria-describedby=${errorFor('date_posted') ? 'error-date_posted' : undefined}
             onInput=${(event: Event) => {
               setField('date_posted', (event.target as HTMLInputElement).value);
             }}
@@ -282,7 +288,9 @@ export function JobFormView({ mode, id }: Props) {
         </label>
         ${
           errorFor('date_posted')
-            ? html`<div class="field-error">${errorFor('date_posted')}</div>`
+            ? html`<div id="error-date_posted" role="alert" class="field-error">
+                ${errorFor('date_posted')}
+              </div>`
             : null
         }
         <label>
@@ -347,10 +355,15 @@ export function JobFormView({ mode, id }: Props) {
           </select>
         </label>
         <label>
-          Minimum salary (cents)
+          Minimum salary ($)
           <input
             type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
             value=${values.salary_min}
+            aria-invalid=${errorFor('salary_min') ? 'true' : undefined}
+            aria-describedby=${errorFor('salary_min') ? 'error-salary_min' : undefined}
             onInput=${(event: Event) => {
               setField('salary_min', (event.target as HTMLInputElement).value);
             }}
@@ -358,14 +371,21 @@ export function JobFormView({ mode, id }: Props) {
         </label>
         ${
           errorFor('salary_min')
-            ? html`<div class="field-error">${errorFor('salary_min')}</div>`
+            ? html`<div id="error-salary_min" role="alert" class="field-error">
+                ${errorFor('salary_min')}
+              </div>`
             : null
         }
         <label>
-          Maximum salary (cents)
+          Maximum salary ($)
           <input
             type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
             value=${values.salary_max}
+            aria-invalid=${errorFor('salary_max') ? 'true' : undefined}
+            aria-describedby=${errorFor('salary_max') ? 'error-salary_max' : undefined}
             onInput=${(event: Event) => {
               setField('salary_max', (event.target as HTMLInputElement).value);
             }}
@@ -373,7 +393,9 @@ export function JobFormView({ mode, id }: Props) {
         </label>
         ${
           errorFor('salary_max')
-            ? html`<div class="field-error">${errorFor('salary_max')}</div>`
+            ? html`<div id="error-salary_max" role="alert" class="field-error">
+                ${errorFor('salary_max')}
+              </div>`
             : null
         }
         <label>
@@ -381,6 +403,8 @@ export function JobFormView({ mode, id }: Props) {
           <input
             type="number"
             value=${values.hourly_rate_min}
+            aria-invalid=${errorFor('hourly_rate_min') ? 'true' : undefined}
+            aria-describedby=${errorFor('hourly_rate_min') ? 'error-hourly_rate_min' : undefined}
             onInput=${(event: Event) => {
               setField(
                 'hourly_rate_min',
@@ -391,7 +415,11 @@ export function JobFormView({ mode, id }: Props) {
         </label>
         ${
           errorFor('hourly_rate_min')
-            ? html`<div class="field-error">
+            ? html`<div
+                id="error-hourly_rate_min"
+                role="alert"
+                class="field-error"
+              >
                 ${errorFor('hourly_rate_min')}
               </div>`
             : null
@@ -401,6 +429,8 @@ export function JobFormView({ mode, id }: Props) {
           <input
             type="number"
             value=${values.hourly_rate_max}
+            aria-invalid=${errorFor('hourly_rate_max') ? 'true' : undefined}
+            aria-describedby=${errorFor('hourly_rate_max') ? 'error-hourly_rate_max' : undefined}
             onInput=${(event: Event) => {
               setField(
                 'hourly_rate_max',
@@ -411,7 +441,11 @@ export function JobFormView({ mode, id }: Props) {
         </label>
         ${
           errorFor('hourly_rate_max')
-            ? html`<div class="field-error">
+            ? html`<div
+                id="error-hourly_rate_max"
+                role="alert"
+                class="field-error"
+              >
                 ${errorFor('hourly_rate_max')}
               </div>`
             : null

@@ -112,8 +112,8 @@ export function draftToFormValues(draft: Partial<JobDraft>): PopupFormValues {
     experience_level: draft.experience_level ?? '',
     security_clearance_req: draft.security_clearance_req ?? false,
     salary_type: draft.salary_type ?? '',
-    salary_min: numberToFormString(draft.salary_min),
-    salary_max: numberToFormString(draft.salary_max),
+    salary_min: centsToDollarsFormString(draft.salary_min),
+    salary_max: centsToDollarsFormString(draft.salary_max),
     hourly_rate_min: numberToFormString(draft.hourly_rate_min),
     hourly_rate_max: numberToFormString(draft.hourly_rate_max),
     salary_text: draft.salary_text ?? '',
@@ -173,8 +173,8 @@ export function formValuesToDraft(values: PopupFormValues): JobDraft {
   setStringField(draft, 'salary_type', values.salary_type);
   setStringField(draft, 'salary_text', values.salary_text);
 
-  setNumberField(draft, 'salary_min', values.salary_min);
-  setNumberField(draft, 'salary_max', values.salary_max);
+  setDollarsAsCentsField(draft, 'salary_min', values.salary_min);
+  setDollarsAsCentsField(draft, 'salary_max', values.salary_max);
   setNumberField(draft, 'hourly_rate_min', values.hourly_rate_min);
   setNumberField(draft, 'hourly_rate_max', values.hourly_rate_max);
 
@@ -204,6 +204,22 @@ function setNumberField(
   if (parsed !== undefined) draft[key] = parsed;
 }
 
+/**
+ * `salary_min`/`salary_max` are stored as integer cents (see
+ * {@link JobDraft}), but the form displays and accepts whole/decimal
+ * dollars to match {@link JobsListView}'s filter inputs and avoid the
+ * "type 12000000 for $120,000" correctness trap. This converts the
+ * dollar-denominated form string back to integer cents for the draft.
+ */
+function setDollarsAsCentsField(
+  draft: Record<string, unknown>,
+  key: string,
+  raw: string,
+): void {
+  const dollars = parseFormNumber(raw);
+  if (dollars !== undefined) draft[key] = Math.round(dollars * 100);
+}
+
 function setListField(
   draft: Record<string, unknown>,
   key: string,
@@ -222,6 +238,17 @@ function parseFormNumber(raw: string): number | undefined {
 
 function numberToFormString(value: number | undefined): string {
   return value === undefined ? '' : String(value);
+}
+
+/**
+ * Formats stored integer cents as a dollars string for display, trimming a
+ * trailing `.00`/trailing zero so whole-dollar amounts read cleanly while
+ * still preserving a cents remainder (e.g. `12000050` -> `"120000.5"`).
+ */
+function centsToDollarsFormString(value: number | undefined): string {
+  if (value === undefined) return '';
+  const dollars = (value / 100).toFixed(2);
+  return dollars.includes('.') ? dollars.replace(/\.?0+$/, '') : dollars;
 }
 
 // --- validation ------------------------------------------------------------
@@ -302,7 +329,13 @@ function isValidUrl(value: string): boolean {
 // --- candidate review mode ---------------------------------------------------
 
 export type ExtractionCandidateSource =
-  'jsonld' | 'dom' | 'meta' | 'visible-text' | 'url' | 'description';
+  | 'jsonld'
+  | 'dom'
+  | 'meta'
+  | 'visible-text'
+  | 'url'
+  | 'description'
+  | 'template';
 
 export const CANDIDATE_SOURCE_LABELS: Record<
   ExtractionCandidateSource,
@@ -314,6 +347,7 @@ export const CANDIDATE_SOURCE_LABELS: Record<
   'visible-text': 'From page text',
   url: 'From URL',
   description: 'From description scan',
+  template: 'From site template',
 };
 
 export function formatCandidateValue(value: unknown): string {

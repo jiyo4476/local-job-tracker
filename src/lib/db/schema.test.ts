@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { JobTrackerDatabase } from './schema';
 
 describe('JobTrackerDatabase migrations', () => {
-  it('upgrades version 1 jobs with contacts and creates settings storage', async () => {
+  it('upgrades version 1 jobs with contacts and creates settings and template storage', async () => {
     const name = 'migration-v1-to-v2';
     const legacy = new Dexie(name);
     legacy.version(1).stores({
@@ -33,6 +33,26 @@ describe('JobTrackerDatabase migrations', () => {
     await expect(upgraded.settings.get('extension')).resolves.toMatchObject({
       autoDetect: false,
     });
+    await upgraded.templates.put({
+      id: '123e4567-e89b-42d3-a456-426614174000',
+      name: 'Legacy migration template',
+      hostname: 'jobs.example.com',
+      path_pattern: '/jobs/*',
+      enabled: true,
+      priority: 50,
+      rules: [
+        {
+          field: 'job_title',
+          selector: 'h1',
+          attribute: 'text',
+          multiple: false,
+          transforms: ['trim'],
+        },
+      ],
+      created_at: '2026-08-14T00:00:00.000Z',
+      updated_at: '2026-08-14T00:00:00.000Z',
+    });
+    await expect(upgraded.templates.count()).resolves.toBe(1);
     upgraded.close();
     await Dexie.delete(name);
   });

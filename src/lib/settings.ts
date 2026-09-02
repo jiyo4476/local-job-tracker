@@ -3,12 +3,14 @@ import { getDb } from './db/schema';
 
 export const extensionSettingsSchema = z.object({
   autoDetect: z.boolean().default(true),
+  autoDownloadTemplates: z.boolean().default(false),
 });
 
 export const extensionSettingsUpdateSchema = extensionSettingsSchema.partial();
 
 export const publicSettingsSchema = extensionSettingsSchema.pick({
   autoDetect: true,
+  autoDownloadTemplates: true,
 });
 
 export const publicSettingsUpdateSchema = publicSettingsSchema.partial();

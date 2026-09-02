@@ -148,7 +148,7 @@ describe('background save flow', () => {
     expect(response).toEqual({
       type: 'GET_SETTINGS_RESULT',
       ok: true,
-      settings: { autoDetect: true },
+      settings: { autoDetect: true, autoDownloadTemplates: false },
     });
   });
 
@@ -192,9 +192,104 @@ describe('background save flow', () => {
             confidence: 'high',
             externalJobId: 'abc123',
           },
+          [],
         ],
       }),
     );
+  });
+
+  it('applies a saved template on an otherwise unsupported company careers site', async () => {
+    const { handleMessage } = await import('../../entrypoints/background');
+    const timestamp = new Date().toISOString();
+    const template = {
+      id: crypto.randomUUID(),
+      name: 'Acme careers',
+      hostname: 'careers.acme.example',
+      path_pattern: '/jobs/*',
+      enabled: true,
+      priority: 50,
+      rules: [
+        {
+          field: 'job_title' as const,
+          selector: 'h1',
+          attribute: 'text' as const,
+          multiple: false,
+          transforms: ['trim' as const],
+        },
+      ],
+      created_at: timestamp,
+      updated_at: timestamp,
+    };
+    await handleMessage({ type: 'SAVE_SITE_TEMPLATE', template });
+    browserMock.tabs.query.mockResolvedValue([
+      { id: 7, url: 'https://careers.acme.example/jobs/123' },
+    ]);
+    browserMock.scripting.executeScript.mockResolvedValue([
+      {
+        result: {
+          draft: { source_platform: 'direct', job_title: 'Engineer' },
+          candidates: {},
+          appliedTemplate: { id: template.id, name: template.name },
+        },
+      },
+    ]);
+
+    const response = await handleMessage({ type: 'EXTRACT_ACTIVE_TAB' });
+
+    expect(response).toMatchObject({
+      type: 'EXTRACT_ACTIVE_TAB_RESULT',
+      ok: true,
+      applied_template: { id: template.id, name: template.name },
+    });
+    expect(browserMock.scripting.executeScript).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        args: [
+          JOB_DRAFT_EXTRACTOR_BRIDGE_KEY,
+          { platform: 'direct', confidence: 'low' },
+          [expect.objectContaining({ id: template.id })],
+        ],
+      }),
+    );
+  });
+
+  it('keeps generic auto-extraction available on job-like company URLs before a template exists', async () => {
+    browserMock.tabs.query.mockResolvedValue([
+      { id: 9, url: 'https://careers.newco.example/jobs/456' },
+    ]);
+    browserMock.scripting.executeScript.mockResolvedValue([
+      {
+        result: {
+          draft: { source_platform: 'direct', job_title: 'Generic result' },
+          candidates: {},
+        },
+      },
+    ]);
+    const { handleMessage } = await import('../../entrypoints/background');
+
+    await expect(
+      handleMessage({ type: 'EXTRACT_ACTIVE_TAB' }),
+    ).resolves.toMatchObject({
+      type: 'EXTRACT_ACTIVE_TAB_RESULT',
+      ok: true,
+      draft: { source_platform: 'direct', job_title: 'Generic result' },
+    });
+  });
+
+  it('injects the user-triggered picker only into an active HTTP(S) tab', async () => {
+    browserMock.tabs.query.mockResolvedValue([
+      { id: 8, url: 'https://careers.example.com/jobs/123' },
+    ]);
+    browserMock.scripting.executeScript.mockResolvedValue([]);
+    const { handleMessage } = await import('../../entrypoints/background');
+
+    await expect(
+      handleMessage({ type: 'START_TEMPLATE_PICKER' }),
+    ).resolves.toEqual({ type: 'START_TEMPLATE_PICKER_RESULT', ok: true });
+    expect(browserMock.scripting.executeScript).toHaveBeenNthCalledWith(1, {
+      target: { tabId: 8 },
+      files: ['/content-scripts/template-picker.js'],
+    });
   });
 
   it('returns TAB_NOT_FOUND when no active tab is available', async () => {

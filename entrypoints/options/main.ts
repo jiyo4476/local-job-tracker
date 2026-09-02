@@ -20,11 +20,16 @@ async function loadSettings(): Promise<void> {
   if (!response.ok || response.type !== 'GET_SETTINGS_RESULT') {
     setStatus(
       !response.ok ? response.error.message : 'Could not load settings.',
+      true,
     );
     return;
   }
 
   setChecked('#auto-detect', response.settings.autoDetect);
+  setChecked(
+    '#auto-download-templates',
+    response.settings.autoDownloadTemplates,
+  );
 }
 
 async function persistSettings(): Promise<void> {
@@ -32,6 +37,7 @@ async function persistSettings(): Promise<void> {
     type: 'SAVE_SETTINGS',
     settings: {
       autoDetect: getChecked('#auto-detect'),
+      autoDownloadTemplates: getChecked('#auto-download-templates'),
     },
   });
 
@@ -39,11 +45,12 @@ async function persistSettings(): Promise<void> {
   if (!response.ok || response.type !== 'SAVE_SETTINGS_RESULT') {
     setStatus(
       !response.ok ? response.error.message : 'Could not save settings.',
+      true,
     );
     return;
   }
 
-  setStatus('Settings saved.');
+  setStatus('Settings saved.', false);
 }
 
 function getChecked(selector: string): boolean {
@@ -55,6 +62,8 @@ function setChecked(selector: string, checked: boolean): void {
   if (input) input.checked = checked;
 }
 
-function setStatus(message: string): void {
-  if (statusEl) statusEl.textContent = message;
+function setStatus(message: string, isError = false): void {
+  if (!statusEl) return;
+  statusEl.textContent = message;
+  statusEl.setAttribute('role', isError ? 'alert' : 'status');
 }

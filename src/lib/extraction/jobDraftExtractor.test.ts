@@ -9,6 +9,7 @@ import leverFixture from '../../../fixtures/html/lever-basic.html?raw';
 import wellfoundFixture from '../../../fixtures/html/wellfound-basic.html?raw';
 import workdayFixture from '../../../fixtures/html/workday-basic.html?raw';
 import { extractJobDraft } from './jobDraftExtractor';
+import { siteTemplateSchema } from '../templates/schema';
 
 function setHead(html: string): void {
   document.head.innerHTML = html;
@@ -35,6 +36,62 @@ beforeEach(() => {
   document.head.innerHTML = '';
   document.body.innerHTML = '';
   document.title = '';
+});
+
+describe('extractJobDraft — reusable site templates', () => {
+  function titleTemplate() {
+    return siteTemplateSchema.parse({
+      id: crypto.randomUUID(),
+      name: 'Acme careers',
+      hostname: 'careers.acme.example',
+      path_pattern: '/jobs/*',
+      rules: [
+        {
+          field: 'job_title',
+          selector: '.template-title',
+          transforms: ['trim'],
+        },
+      ],
+    });
+  }
+
+  it('uses a matching template ahead of generic visible-text fallback', async () => {
+    setLocation('https://careers.acme.example/jobs/123');
+    setBody(
+      '<h1>Generic heading</h1><p class="template-title">Template title</p>',
+    );
+
+    const result = await extractJobDraft(
+      { platform: 'direct', confidence: 'low' },
+      [titleTemplate()],
+    );
+
+    expect(result.draft.job_title).toBe('Template title');
+    expect(result.appliedTemplate?.name).toBe('Acme careers');
+  });
+
+  it('keeps high-confidence structured data ahead of a template candidate', async () => {
+    setLocation('https://careers.acme.example/jobs/123');
+    setHead(`<script type="application/ld+json">
+      { "@type": "JobPosting", "title": "Structured title" }
+    </script>`);
+    setBody('<p class="template-title">Template title</p>');
+
+    const result = await extractJobDraft(
+      { platform: 'direct', confidence: 'low' },
+      [titleTemplate()],
+    );
+
+    expect(result.draft.job_title).toBe('Structured title');
+    expect(result.candidates.job_title).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'template',
+          value: 'Template title',
+        }),
+      ]),
+    );
+  });
 });
 
 afterEach(() => {

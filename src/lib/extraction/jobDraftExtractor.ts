@@ -9,6 +9,11 @@ import {
 import { normalizePlainDate } from '../plainDate';
 import { extractTaxonomy } from './taxonomyExtractor';
 import { mergeTaxonomyTags } from '../taxonomyFields';
+import {
+  executeSiteTemplate,
+  selectMatchingSiteTemplates,
+} from '../templates/engine';
+import type { SiteTemplate } from '../templates/schema';
 
 // '#text' must be listed explicitly alongside KEEP_CONTENT: false below --
 // without it, DOMPurify treats bare text nodes as unlisted too and strips
@@ -246,19 +251,29 @@ function elementToSafeMarkdown(root: Element): string {
  * Runs from the locally bundled runtime content script in the MV3 isolated
  * world so the DOMPurify and Turndown browser dependencies remain available.
  */
-export async function extractJobDraft(detection: {
-  platform: ApiSourcePlatform;
-  confidence: 'high' | 'low';
-  externalJobId?: string;
-}): Promise<{
+export async function extractJobDraft(
+  detection: {
+    platform: ApiSourcePlatform;
+    confidence: 'high' | 'low';
+    externalJobId?: string;
+  },
+  templates: SiteTemplate[] = [],
+): Promise<{
   draft: JobDraft;
+  appliedTemplate?: { id: string; name: string };
   candidates: Partial<
     Record<
       keyof JobDraft,
       {
         value: unknown;
         source:
-          'jsonld' | 'dom' | 'meta' | 'visible-text' | 'url' | 'description';
+          | 'jsonld'
+          | 'dom'
+          | 'meta'
+          | 'visible-text'
+          | 'url'
+          | 'description'
+          | 'template';
         confidence: 'high' | 'medium' | 'low';
       }[]
     >
@@ -269,7 +284,13 @@ export async function extractJobDraft(detection: {
   // field selection (taxonomy merge happens after ranking) but lets the
   // popup's field review identify where an array candidate came from.
   type Source =
-    'jsonld' | 'dom' | 'meta' | 'visible-text' | 'url' | 'description';
+    | 'jsonld'
+    | 'dom'
+    | 'meta'
+    | 'visible-text'
+    | 'url'
+    | 'description'
+    | 'template';
   type Confidence = 'high' | 'medium' | 'low';
 
   interface Candidate {
@@ -2675,6 +2696,27 @@ export async function extractJobDraft(detection: {
     await platformDomExtractors[detection.platform]?.();
   }
 
+  // User-authored templates are a medium-confidence bridge between targeted
+  // provider rules and generic fallbacks. Only the deterministic best match
+  // applies; provider high-confidence candidates therefore retain priority.
+  const matchedTemplate = selectMatchingSiteTemplates(
+    templates,
+    location.href,
+  )[0];
+  const appliedTemplate = matchedTemplate
+    ? executeSiteTemplate(
+        matchedTemplate,
+        document,
+        location.href,
+        elementToSafeMarkdown,
+      )
+    : undefined;
+  if (appliedTemplate) {
+    for (const [field, value] of Object.entries(appliedTemplate.values)) {
+      addCandidate(field as keyof JobDraft, value, 'template', 'medium');
+    }
+  }
+
   // --- visible-text source -------------------------------------------------
   const h1Text = document
     .querySelector('h1')
@@ -2709,11 +2751,12 @@ export async function extractJobDraft(detection: {
     dom: 0,
     jsonld: 1,
     meta: 2,
-    url: 3,
-    'visible-text': 4,
+    template: 3,
+    url: 4,
+    'visible-text': 5,
     // Description-derived taxonomy values are appended after ranking (see the
     // taxonomy merge below); the rank only exists so the table is exhaustive.
-    description: 5,
+    description: 6,
   };
   const confidenceRank: Record<Confidence, number> = {
     high: 0,
@@ -2814,5 +2857,13 @@ export async function extractJobDraft(detection: {
   return {
     draft: draft as unknown as JobDraft,
     candidates: outCandidates,
+    ...(appliedTemplate
+      ? {
+          appliedTemplate: {
+            id: appliedTemplate.templateId,
+            name: appliedTemplate.templateName,
+          },
+        }
+      : {}),
   };
 }

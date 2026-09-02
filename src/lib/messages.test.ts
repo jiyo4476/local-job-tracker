@@ -43,6 +43,7 @@ describe('extension message contracts', () => {
         type: 'SAVE_SETTINGS',
         settings: {
           autoDetect: false,
+          autoDownloadTemplates: true,
           unknownField: 'ignored',
         },
       }),
@@ -50,17 +51,19 @@ describe('extension message contracts', () => {
       type: 'SAVE_SETTINGS',
       settings: {
         autoDetect: false,
+        autoDownloadTemplates: true,
       },
     });
   });
 
-  it('returns only autoDetect through public settings responses', () => {
+  it('returns public settings through response contracts', () => {
     expect(
       extensionResponseSchema.parse({
         type: 'GET_SETTINGS_RESULT',
         ok: true,
         settings: {
           autoDetect: false,
+          autoDownloadTemplates: true,
         },
       }),
     ).toEqual({
@@ -68,6 +71,7 @@ describe('extension message contracts', () => {
       ok: true,
       settings: {
         autoDetect: false,
+        autoDownloadTemplates: true,
       },
     });
   });

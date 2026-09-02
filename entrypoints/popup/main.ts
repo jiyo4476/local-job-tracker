@@ -33,9 +33,13 @@ import {
   TAXONOMY_GROUP_COPY,
   type TaxonomyField,
 } from '../../src/lib/taxonomyFields';
-import type { JobDraft } from '../../src/lib/schemas';
+import type { JobDraft, ScrapePayload } from '../../src/lib/schemas';
 import type { PopupDraftContext } from '../../src/lib/popupDraft';
 import { popupDraftPersistenceErrorMessage } from '../../src/lib/popupDraftFeedback';
+import {
+  buildJobMarkdown,
+  jobMarkdownFilename,
+} from '../../src/lib/markdownExport';
 
 const FIELD_IDS: Record<DraftFormField, string> = {
   job_title: 'job-title',
@@ -76,9 +80,17 @@ const statusEl = document.querySelector<HTMLDivElement>('#status');
 const form = document.querySelector<HTMLFormElement>('#job-form');
 const extractButton =
   document.querySelector<HTMLButtonElement>('#extract-button');
+const templateButton =
+  document.querySelector<HTMLButtonElement>('#template-button');
 const exportButton =
   document.querySelector<HTMLButtonElement>('#export-button');
 const saveButton = document.querySelector<HTMLButtonElement>('#save-button');
+const advancedFieldsToggle = document.querySelector<HTMLButtonElement>(
+  '#advanced-fields-toggle',
+);
+const advancedFieldsContent = document.querySelector<HTMLDivElement>(
+  '#advanced-fields-content',
+);
 
 let saveInFlight = false;
 let formRevision = 0;
@@ -323,6 +335,10 @@ extractButton?.addEventListener('click', () => {
   void extractActiveTab();
 });
 
+templateButton?.addEventListener('click', () => {
+  void startTemplatePicker();
+});
+
 exportButton?.addEventListener('click', () => {
   exportJsonLd();
 });
@@ -331,8 +347,20 @@ saveButton?.addEventListener('click', () => {
   void saveJob();
 });
 
+advancedFieldsToggle?.addEventListener('click', () => {
+  toggleAdvancedFields();
+});
+
 renderTaxonomyGroups();
 void initializePopup();
+
+function toggleAdvancedFields(): void {
+  if (!advancedFieldsToggle || !advancedFieldsContent) return;
+  const expanded =
+    advancedFieldsToggle.getAttribute('aria-expanded') === 'true';
+  advancedFieldsToggle.setAttribute('aria-expanded', String(!expanded));
+  advancedFieldsContent.hidden = expanded;
+}
 
 async function initializePopup(): Promise<void> {
   popupDraftContext = await getActiveTabContext();
@@ -349,7 +377,21 @@ async function autoExtractIfEnabled(): Promise<void> {
     response.type === 'GET_SETTINGS_RESULT' &&
     response.settings.autoDetect
   ) {
-    await extractActiveTab();
+    const extraction = await extractActiveTab();
+    // A matched site template means this URL is on the user's whitelist
+    // (hostname + path pattern, e.g. company.job/jobs/*). Automatic save and
+    // Markdown download remain a separate explicit opt-in because a template
+    // or salary conversion can still be wrong. Without that opt-in, the user
+    // reviews the extracted fields and saves manually.
+    if (
+      extraction?.applied_template &&
+      response.settings.autoDownloadTemplates
+    ) {
+      await saveJob({
+        auto: true,
+        templateName: extraction.applied_template.name,
+      });
+    }
     return;
   }
   setStatus(
@@ -388,7 +430,9 @@ async function getActiveTabContext(): Promise<PopupDraftContext | undefined> {
   }
 }
 
-async function extractActiveTab(): Promise<void> {
+async function extractActiveTab(): Promise<
+  { applied_template?: { id: string; name: string } | undefined } | undefined
+> {
   clearFieldErrors();
   renderCandidates(undefined);
   setStatus('Scanning the active tab…', 'status');
@@ -400,38 +444,79 @@ async function extractActiveTab(): Promise<void> {
     });
     const response = extensionResponseSchema.parse(rawResponse);
     renderResponse(response);
+    return response.ok && response.type === 'EXTRACT_ACTIVE_TAB_RESULT'
+      ? response
+      : undefined;
   } catch {
     setStatus(
       'Could not extract this page. Try again or enter the details manually.',
       'alert',
     );
+    return undefined;
   } finally {
     setBusy(false);
   }
 }
 
-async function saveJob(): Promise<void> {
+async function startTemplatePicker(): Promise<void> {
+  setStatus('Starting the element picker…', 'status');
+  try {
+    const rawResponse: unknown = await browser.runtime.sendMessage({
+      type: 'START_TEMPLATE_PICKER',
+    });
+    const response = extensionResponseSchema.parse(rawResponse);
+    if (!response.ok) {
+      setStatus(response.error.message, 'alert');
+      return;
+    }
+    setStatus(
+      'Element picker opened on the page. The popup may now close.',
+      'status',
+    );
+  } catch {
+    setStatus('Could not start the element picker on this page.', 'alert');
+  }
+}
+
+async function saveJob(
+  options: { auto?: boolean; templateName?: string } = {},
+): Promise<void> {
   if (saveInFlight) return;
 
   clearFieldErrors();
   const pendingTagField = commitAllPendingTagInputs();
   if (pendingTagField) {
-    setStatus('Fix the highlighted fields before saving.', 'alert');
+    setStatus(
+      options.auto
+        ? 'Automatic save skipped: finish the highlighted tag before saving this matched job.'
+        : 'Fix the highlighted fields before saving.',
+      'alert',
+    );
     return;
   }
   const values = readFormValues();
   const errors = validateFormValues(values);
   if (errors.length > 0) {
     renderFieldErrors(errors);
-    setStatus('Fix the highlighted fields before saving.', 'alert');
-    const invalidField = firstInvalidField(errors);
-    if (invalidField) focusField(invalidField);
+    setStatus(
+      options.auto
+        ? 'Automatic save skipped: the matched template needs field corrections. Review the extracted draft, then save manually.'
+        : 'Fix the highlighted fields before saving.',
+      'alert',
+    );
+    if (!options.auto) {
+      const invalidField = firstInvalidField(errors);
+      if (invalidField) focusField(invalidField);
+    }
     return;
   }
 
   saveInFlight = true;
   const submittedRevision = formRevision;
-  setStatus('Saving job…', 'status');
+  setStatus(
+    options.auto ? 'Auto-saving matched job…' : 'Saving job…',
+    'status',
+  );
   setSaveDisabled(true);
 
   try {
@@ -456,18 +541,47 @@ async function saveJob(): Promise<void> {
         await persistCurrentDraft();
       }
     }
+    if (
+      response.ok &&
+      response.type === 'SAVE_JOB_LOCAL_RESULT' &&
+      options.auto
+    ) {
+      downloadMarkdown(response.payload);
+      setStatus(
+        `${formatSaveResult(response.result)} Matched site template “${options.templateName ?? 'saved template'}” — downloaded ${jobMarkdownFilename(response.payload)}.`,
+        'status',
+      );
+      return;
+    }
     renderResponse(response);
   } catch (error) {
-    setStatus(
-      error instanceof Error
-        ? error.message
-        : 'Review the fields before saving this job.',
-      'alert',
-    );
+    if (!options.auto) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : 'Review the fields before saving this job.',
+        'alert',
+      );
+    }
   } finally {
     saveInFlight = false;
     setSaveDisabled(false);
   }
+}
+
+/** Triggers a browser download of `payload` as a `.md` file, no extra permissions required. */
+function downloadMarkdown(payload: ScrapePayload): void {
+  const blob = new Blob([buildJobMarkdown(payload)], {
+    type: 'text/markdown;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = jobMarkdownFilename(payload);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function enterManualEntry(): void {
@@ -540,7 +654,12 @@ function renderResponse(response: ExtensionResponse): void {
     formRevision += 1;
     void persistCurrentDraft();
     renderCandidates(response.candidates);
-    setStatus('Review the extracted fields before saving.', 'status');
+    setStatus(
+      response.applied_template
+        ? `Applied site template “${response.applied_template.name}”. Review the extracted fields before saving.`
+        : 'Review the extracted fields before saving.',
+      'status',
+    );
     return;
   }
 
@@ -834,6 +953,7 @@ function setBusy(disabled: boolean): void {
       el.disabled = disabled;
     });
   setExtractDisabled(disabled);
+  if (templateButton) templateButton.disabled = disabled;
   setExportDisabled(disabled);
   setSaveDisabled(disabled);
 }

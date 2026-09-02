@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Job Tracker Capture</title>
+    <script type="module" src="./main.ts"></script>
+    <style>
+      :root,
+      body,
+      iframe {
+        height: 100%;
+        margin: 0;
+        width: 100%;
+      }
+
+      body {
+        background: Canvas;
+        color: CanvasText;
+        min-width: 360px;
+        overflow: hidden;
+      }
+
+      iframe {
+        border: 0;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe
+      id="capture-frame"
+      src="/popup.html"
+      title="Job Tracker Capture"
+      aria-label="Job Tracker Capture"
+    ></iframe>
+  </body>
+</html>

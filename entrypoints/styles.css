@@ -151,17 +151,18 @@ button:disabled {
   opacity: 0.55;
 }
 
-details {
+.advanced-fields {
   border-block: 1px solid color-mix(in srgb, CanvasText 14%, Canvas);
   padding-block: 10px;
 }
 
-summary {
+.advanced-fields > button {
   cursor: pointer;
   font-weight: 600;
+  padding-inline: 0;
 }
 
-details[open] summary {
+.advanced-fields > button[aria-expanded='true'] {
   margin-bottom: 10px;
 }
 

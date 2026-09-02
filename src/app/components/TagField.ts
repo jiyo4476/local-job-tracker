@@ -49,10 +49,14 @@ export function TagField({ field, tags, onChange }: Props) {
     onChange(removeTagAt(tags, index));
   };
 
+  const helpId = `help-${field}`;
+  const errorId = `error-${field}`;
+  const describedBy = error ? `${helpId} ${errorId}` : helpId;
+
   return html`
     <fieldset class="tag-group">
       <legend>${copy.label}</legend>
-      <p class="tag-help">${copy.helpText}</p>
+      <p class="tag-help" id=${helpId}>${copy.helpText}</p>
       ${
         tags.length === 0
           ? html`<p class="tag-empty">${copy.emptyState}</p>`
@@ -82,6 +86,7 @@ export function TagField({ field, tags, onChange }: Props) {
           value=${pending}
           placeholder=${copy.addLabel}
           aria-label=${copy.addLabel}
+          aria-describedby=${describedBy}
           onInput=${(event: Event) => {
             setPending((event.target as HTMLInputElement).value);
           }}
@@ -94,7 +99,7 @@ export function TagField({ field, tags, onChange }: Props) {
         />
         <button type="button" onClick=${commit}>Add</button>
       </div>
-      ${error ? html`<div class="field-error">${error}</div>` : null}
+      ${error ? html`<div id=${errorId} role="alert" class="field-error">${error}</div>` : null}
     </fieldset>
   `;
 }

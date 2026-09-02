@@ -291,6 +291,16 @@ body {
   border-left: 3px solid Highlight;
   padding: 8px 10px;
 }
+.status-message.success {
+  background: color-mix(in srgb, #16a34a 14%, Canvas);
+  border-left-color: #16a34a;
+  color: color-mix(in srgb, #16a34a 70%, CanvasText);
+}
+.status-message.error {
+  background: color-mix(in srgb, #dc2626 14%, Canvas);
+  border-left-color: #dc2626;
+  color: color-mix(in srgb, #dc2626 70%, CanvasText);
+}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -301,4 +311,32 @@ body {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+.template-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.template-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, CanvasText 18%, Canvas);
+  border-radius: 0.5rem;
+}
+
+.template-list li > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }
