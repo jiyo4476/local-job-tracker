@@ -136,6 +136,13 @@ const activeClassSchema = z
 
 const templateSelectionSchema = z
   .object({
+    list_selector: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX_SELECTOR_LENGTH)
+      .refine(isBoundedSelector, 'Selector contains unsupported syntax.')
+      .optional(),
     item_selector: z
       .string()
       .trim()

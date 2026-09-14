@@ -40,6 +40,18 @@ describe('site template selection schema', () => {
     });
   });
 
+  it('accepts an optional list selector', () => {
+    const parsed = siteTemplateSchema.parse({
+      ...baseTemplate,
+      selection: {
+        list_selector: 'ul.job-results',
+        item_selector: 'li.job-card',
+        active_class: 'is-current',
+      },
+    });
+    expect(parsed.selection?.list_selector).toBe('ul.job-results');
+  });
+
   it('rejects whitespace, selector syntax, and overly broad active classes', () => {
     for (const active_class of ['active selected', '.active', '*']) {
       expect(() =>
@@ -54,6 +66,16 @@ describe('site template selection schema', () => {
         ...baseTemplate,
         selection: {
           item_selector: '.job-card, .other',
+          active_class: 'active',
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      siteTemplateSchema.parse({
+        ...baseTemplate,
+        selection: {
+          list_selector: 'ul.job-results, ol.other',
+          item_selector: 'li.job-card',
           active_class: 'active',
         },
       }),

@@ -59,6 +59,7 @@ function startTemplatePicker(): void {
       <label>Template name <input id="name" maxlength="120" /></label>
       <label>Matching path <input id="path" maxlength="500" /></label>
       <p>Optional list selection: limit extraction to the active item in a repeated job list.</p>
+      <label>List container selector <input id="list-selector" maxlength="500" placeholder="ul.job-list" /></label>
       <label>List item selector <input id="item-selector" maxlength="500" placeholder="li.job-card" /></label>
       <label>Active item class <input id="active-class" maxlength="100" placeholder="vjs-highlight" /></label>
       <label>Job field <select id="field"></select></label>
@@ -232,6 +233,10 @@ function startTemplatePicker(): void {
         }
         try {
           const timestamp = new Date().toISOString();
+          const listSelector = requiredElement<HTMLInputElement>(
+            shadow,
+            '#list-selector',
+          ).value.trim();
           const itemSelector = requiredElement<HTMLInputElement>(
             shadow,
             '#item-selector',
@@ -240,9 +245,12 @@ function startTemplatePicker(): void {
             shadow,
             '#active-class',
           ).value.trim();
-          if (Boolean(itemSelector) !== Boolean(activeClass)) {
+          if (
+            Boolean(itemSelector) !== Boolean(activeClass) ||
+            (Boolean(listSelector) && !itemSelector)
+          ) {
             throw new Error(
-              'Enter both the list item selector and active item class, or leave both blank.',
+              'Enter the list item selector and active item class together; add a list container selector when the items are inside a UL or OL.',
             );
           }
           const template = siteTemplateSchema.parse({
@@ -257,6 +265,7 @@ function startTemplatePicker(): void {
             ...(itemSelector && activeClass
               ? {
                   selection: {
+                    ...(listSelector ? { list_selector: listSelector } : {}),
                     item_selector: itemSelector,
                     active_class: activeClass,
                   },

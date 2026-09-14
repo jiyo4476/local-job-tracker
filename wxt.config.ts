@@ -2,13 +2,13 @@ import { defineConfig } from 'wxt';
 
 export default defineConfig({
   manifest: () => ({
-    name: 'Job Tracker Capture',
+    name: 'Local Job Tracker',
     description:
-      'Review and save visible job postings into your local Job Tracker — no login, no server.',
+      'Review and save visible job postings into your Local Job Tracker — no login, no server.',
     version: '0.1.0',
     permissions: ['activeTab', 'scripting', 'storage', 'sidePanel'],
     action: {
-      default_title: 'Save job to Job Tracker',
+      default_title: 'Save job to Local Job Tracker',
     },
     side_panel: {
       default_path: 'sidepanel.html',
