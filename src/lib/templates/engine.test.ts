@@ -206,6 +206,35 @@ describe('site template engine', () => {
     expect(result.values).toEqual({ job_title: 'Selected A' });
   });
 
+  it('deduplicates items matched by nested list containers so the budget is not double-spent', () => {
+    // Each pair below is a list container nested inside another list
+    // container with the same class, so `list_selector` matches both the
+    // outer and inner element and `querySelectorAll(item_selector)` on the
+    // outer returns the same filler item the inner one also returns.
+    // Without deduplication that doubles the inspected count per pair,
+    // exhausting the 100-item match budget on 51 pairs (102 inspections)
+    // before the real container — last in document order — is ever reached.
+    const fillerPair =
+      '<ul class="jobs"><ul class="jobs"><li class="job-card"><h2>Filler</h2></li></ul></ul>';
+    document.body.innerHTML =
+      fillerPair.repeat(51) +
+      '<ul class="jobs"><li class="job-card"><h2>Selected</h2><span class="active"></span></li></ul>';
+    const result = executeSiteTemplate(
+      template({
+        selection: {
+          list_selector: 'ul.jobs',
+          item_selector: 'li.job-card',
+          active_class: 'active',
+        },
+        rules: [{ field: 'job_title', selector: 'h2' }],
+      }),
+      document,
+      'https://careers.acme.example/jobs/2',
+      () => '',
+    );
+    expect(result.values).toEqual({ job_title: 'Selected' });
+  });
+
   it('does not select an item from outside configured lists', () => {
     document.body.innerHTML = `
       <div class="outside"><li class="job-card"><h2>Outside</h2><span class="active"></span></li></div>

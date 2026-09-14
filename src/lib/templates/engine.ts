@@ -134,7 +134,11 @@ function findActiveItem(
     return undefined;
   }
 
-  let inspected = 0;
+  // Deduplicate before applying the match budget: nested list containers
+  // (e.g. a configured list selector that also matches an inner wrapper)
+  // otherwise return the same item once per enclosing container, burning
+  // through MAX_RULE_MATCHES before a later list's active item is reached.
+  const seen = new Set<Element>();
   for (const container of containers) {
     let items: Element[];
     try {
@@ -142,11 +146,14 @@ function findActiveItem(
     } catch {
       continue;
     }
-    for (const item of items) {
-      if (inspected >= MAX_RULE_MATCHES) return undefined;
-      inspected += 1;
-      if (hasActiveClass(item, activeClass)) return item;
-    }
+    for (const item of items) seen.add(item);
+  }
+
+  let inspected = 0;
+  for (const item of seen) {
+    if (inspected >= MAX_RULE_MATCHES) return undefined;
+    inspected += 1;
+    if (hasActiveClass(item, activeClass)) return item;
   }
   return undefined;
 }
