@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 This file provides guidance when working in this repository.
 
@@ -65,6 +65,6 @@ No environment variables are required to build or run this extension — it make
 
 ## Workspace Context
 
-This repo is one of three in the `job_tracker` workspace; see `../CLAUDE.md` for the cross-project picture — note that this extension's shift to standalone (no backend, no OAuth) supersedes the *use* of that workspace's Next.js/Postgres/Authentik architecture for job tracking, without those repos being edited. Cross-project design docs, ADRs, and per-project task boards live in the shared workspace vault at `../.obsidian/`.
+This repo is one of three in the `job_tracker` workspace; see `../AGENTS.md` for the cross-project picture — note that this extension's shift to standalone (no backend, no OAuth) supersedes the _use_ of that workspace's Next.js/Postgres/Authentik architecture for job tracking, without those repos being edited. Cross-project design docs, ADRs, and per-project task boards live in the shared workspace vault at `../.obsidian/`.
 
 This repo also has its **own local, repo-scoped Obsidian vault** at `./vault/` for day-to-day task tracking specific to this extension. It is intentionally **not committed to git** (`vault/` is gitignored) — it is local working memory, not a project deliverable. Cross-project decisions and anything meant to be durable/shared still belong in the workspace vault at `../.obsidian/`, not here.

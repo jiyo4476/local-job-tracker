@@ -140,6 +140,9 @@ dist
 # obsidian
 .obsidian/
 
+# repo-local task-tracking vault (local working memory, not a deliverable)
+/vault/
+
 # codex
 .codex/
 
