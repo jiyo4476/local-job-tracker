@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildStableSelector,
   inferTemplateRule,
+  listDescendantTagNames,
+  previewText,
   suggestPathPattern,
 } from './picker';
 
@@ -74,5 +76,38 @@ describe('template element picker utilities', () => {
       attribute: 'data-href',
       transforms: ['absolute_url'],
     });
+  });
+
+  it('lists a container plus its descendants tag names, deduped and sorted', () => {
+    document.body.innerHTML = `
+      <div id="card"><span>A</span><p><span>B</span></p><h1>Title</h1></div>
+    `;
+    const card = document.querySelector('#card');
+    expect(card && listDescendantTagNames(card)).toEqual([
+      'div',
+      'h1',
+      'p',
+      'span',
+    ]);
+  });
+
+  it('previews text for plain elements and link modes, truncated to 160 chars', () => {
+    document.body.innerHTML = `
+      <div id="card">
+        <span id="plain">  Senior   Engineer  </span>
+        <a id="link" href="/jobs/123">Apply <em>now</em></a>
+      </div>
+    `;
+    const plain = document.querySelector('#plain');
+    expect(plain && previewText(plain, 'text')).toBe('Senior Engineer');
+
+    const link = document.querySelector('#link');
+    expect(link && previewText(link, 'link')).toBe('/jobs/123');
+    expect(link && previewText(link, 'link_text')).toBe('Apply now');
+
+    const longText = document.createElement('span');
+    longText.textContent = 'x'.repeat(200);
+    document.body.append(longText);
+    expect(previewText(longText, 'text')).toHaveLength(160);
   });
 });

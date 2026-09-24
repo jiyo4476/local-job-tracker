@@ -218,6 +218,30 @@ export function inferTemplateRule(
   };
 }
 
+export function listDescendantTagNames(container: Element): string[] {
+  const tags = new Set<string>([container.tagName.toLowerCase()]);
+  for (const descendant of container.querySelectorAll('*')) {
+    tags.add(descendant.tagName.toLowerCase());
+  }
+  return [...tags].sort();
+}
+
+export function previewText(
+  element: Element,
+  captureMode: PickerCaptureMode,
+): string {
+  const linkTarget = findLinkTarget(element);
+  const source =
+    captureMode === 'link'
+      ? (linkTarget?.getAttribute('href') ??
+        linkTarget?.getAttribute('formaction') ??
+        linkTarget?.getAttribute('data-href') ??
+        linkTarget?.getAttribute('data-url') ??
+        '')
+      : (linkTarget?.textContent ?? element.textContent ?? '');
+  return source.replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
 function findLinkTarget(element: Element): Element | null {
   return element.closest(
     'a[href], button[formaction], [data-href], [data-url]',

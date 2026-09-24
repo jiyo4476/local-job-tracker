@@ -4,9 +4,11 @@ import { extensionResponseSchema } from '../src/lib/messages';
 import {
   buildStableSelector,
   inferTemplateRule,
+  listDescendantTagNames,
   PICKER_CAPTURE_MODES,
   PICKER_FIELDS,
   type PickerCaptureMode,
+  previewText,
   suggestPathPattern,
 } from '../src/lib/templates/picker';
 import { TEMPLATE_PICKER_BRIDGE_KEY } from '../src/lib/templates/pickerBridge';
@@ -51,6 +53,7 @@ function startTemplatePicker(): void {
       #rules { padding-left: 20px; overflow-wrap: anywhere; }
       #status[role="alert"] { color: #b91c1c; font-weight: 600; }
       #highlight { position: fixed; z-index: 2147483646; pointer-events: none; border: 3px solid #f59e0b; background: rgba(245,158,11,.12); }
+      #refine-panel { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #9ca3af; }
     </style>
     <div id="highlight" hidden></div>
     <section id="picker-panel" role="dialog" aria-modal="false" aria-labelledby="picker-title" tabindex="-1">
@@ -70,6 +73,19 @@ function startTemplatePicker(): void {
         <button id="cancel" type="button">Cancel</button>
       </div>
       <p id="status" role="status" aria-live="polite">No fields selected yet.</p>
+      <div id="refine-panel" hidden>
+        <p>Not quite the right element? Pick a tag type and step through its matches inside the highlighted container.</p>
+        <label>Tag type <select id="cycle-tag"></select></label>
+        <div class="actions">
+          <button id="cycle-prev" type="button">◀ Prev</button>
+          <button id="cycle-next" type="button">Next ▶</button>
+        </div>
+        <div class="actions">
+          <button id="use-candidate" type="button" class="primary">Use this element</button>
+          <button id="use-match" type="button">Use this match</button>
+          <button id="refine-cancel" type="button">Cancel</button>
+        </div>
+      </div>
       <ol id="rules"></ol>
     </section>
   `;
@@ -142,6 +158,28 @@ function startTemplatePicker(): void {
     box.hidden = false;
   };
 
+  let candidate: Element | null = null;
+  let cycleMatches: Element[] = [];
+  let cycleIndex = 0;
+
+  const refinePanel = requiredElement<HTMLElement>(shadow, '#refine-panel');
+  const cycleTagSelect = requiredElement<HTMLSelectElement>(
+    shadow,
+    '#cycle-tag',
+  );
+  const cyclePrevButton = requiredElement<HTMLButtonElement>(
+    shadow,
+    '#cycle-prev',
+  );
+  const cycleNextButton = requiredElement<HTMLButtonElement>(
+    shadow,
+    '#cycle-next',
+  );
+  const useMatchButton = requiredElement<HTMLButtonElement>(
+    shadow,
+    '#use-match',
+  );
+
   function onPointerOver(event: Event) {
     if (!selecting) return;
     const target = event.target;
@@ -150,14 +188,11 @@ function startTemplatePicker(): void {
     }
   }
 
-  function onPageClick(event: MouseEvent) {
-    if (!selecting || event.composedPath().includes(host)) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    const selectedField = field.value as (typeof PICKER_FIELDS)[number];
-    const captureMode = capture.value as PickerCaptureMode;
+  function commitTarget(
+    target: Element,
+    selectedField: (typeof PICKER_FIELDS)[number],
+    captureMode: PickerCaptureMode,
+  ): boolean {
     if (
       captureMode === 'link' &&
       !target.closest('a[href], button[formaction], [data-href], [data-url]')
@@ -166,41 +201,116 @@ function startTemplatePicker(): void {
         'That element does not expose a link URL. Select an anchor or a button/link with a URL attribute.',
         true,
       );
-      return;
+      return false;
     }
     const selector = buildStableSelector(target);
     if (!selector) {
       setStatus('Could not create a stable selector for that element.', true);
-      return;
+      return false;
     }
     rules.set(
       selectedField,
       inferTemplateRule(selectedField, target, selector, captureMode),
     );
-    selecting = false;
-    setHighlight(undefined);
     renderRules();
-    const linkTarget = target.closest(
-      'a[href], button[formaction], [data-href], [data-url]',
-    );
-    const previewSource =
-      captureMode === 'link'
-        ? (linkTarget?.getAttribute('href') ??
-          linkTarget?.getAttribute('formaction') ??
-          linkTarget?.getAttribute('data-href') ??
-          linkTarget?.getAttribute('data-url') ??
-          '')
-        : (linkTarget?.textContent ?? target.textContent ?? '');
-    const preview = previewSource.replace(/\s+/g, ' ').trim().slice(0, 160);
+    const preview = previewText(target, captureMode);
     setStatus(
       `Mapped ${selectedField.replaceAll('_', ' ')}${preview ? `: “${preview}”` : ''}. Choose another field or save.`,
     );
-    requiredElement<HTMLButtonElement>(shadow, '#pick').focus();
+    return true;
+  }
+
+  function renderCycleStatus() {
+    if (cycleMatches.length === 0) {
+      setStatus('No matches for that tag inside the selected element.', true);
+      return;
+    }
+    const match = cycleMatches[cycleIndex];
+    const captureMode = capture.value as PickerCaptureMode;
+    const preview = match ? previewText(match, captureMode) : '';
+    setStatus(
+      `Match ${String(cycleIndex + 1)} of ${String(cycleMatches.length)}${preview ? `: “${preview}”` : ''}.`,
+    );
+  }
+
+  function cycleTo(index: number) {
+    if (cycleMatches.length === 0) return;
+    cycleIndex =
+      ((index % cycleMatches.length) + cycleMatches.length) %
+      cycleMatches.length;
+    setHighlight(cycleMatches[cycleIndex]);
+    renderCycleStatus();
+  }
+
+  function onCycleTagChange() {
+    if (!candidate) return;
+    const tag = cycleTagSelect.value;
+    const matches = [...candidate.querySelectorAll(tag)];
+    cycleMatches =
+      candidate.tagName.toLowerCase() === tag
+        ? [candidate, ...matches]
+        : matches;
+    cycleIndex = 0;
+    if (cycleMatches.length > 0) {
+      setHighlight(cycleMatches[0]);
+    }
+    renderCycleStatus();
+  }
+
+  function enterRefineMode(target: Element) {
+    candidate = target;
+    selecting = false;
+    setHighlight(target);
+    cycleTagSelect.replaceChildren();
+    for (const tag of listDescendantTagNames(target)) {
+      const option = document.createElement('option');
+      option.value = tag;
+      option.textContent = tag;
+      cycleTagSelect.append(option);
+    }
+    onCycleTagChange();
+    refinePanel.hidden = false;
+    setStatus(
+      `Selected <${target.tagName.toLowerCase()}>. Use this element, or pick a tag type to step through its matches inside it.`,
+    );
+  }
+
+  function exitRefineMode() {
+    candidate = null;
+    cycleMatches = [];
+    cycleIndex = 0;
+    refinePanel.hidden = true;
+    setHighlight(undefined);
+  }
+
+  function onPageClick(event: MouseEvent) {
+    if (!selecting || event.composedPath().includes(host)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    enterRefineMode(target);
   }
 
   function onKeyDown(event: KeyboardEvent) {
+    if (!refinePanel.hidden) {
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        cycleTo(cycleIndex + 1);
+        return;
+      }
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        cycleTo(cycleIndex - 1);
+        return;
+      }
+    }
     if (event.key !== 'Escape') return;
-    if (selecting) {
+    if (!refinePanel.hidden) {
+      exitRefineMode();
+      setStatus('Refinement cancelled.');
+      requiredElement<HTMLButtonElement>(shadow, '#pick').focus();
+    } else if (selecting) {
       selecting = false;
       setHighlight(undefined);
       setStatus('Element selection cancelled.');
@@ -209,6 +319,46 @@ function startTemplatePicker(): void {
       cleanup();
     }
   }
+
+  cycleTagSelect.addEventListener('change', onCycleTagChange);
+  cyclePrevButton.addEventListener('click', () => {
+    cycleTo(cycleIndex - 1);
+  });
+  cycleNextButton.addEventListener('click', () => {
+    cycleTo(cycleIndex + 1);
+  });
+  requiredElement<HTMLButtonElement>(shadow, '#use-candidate').addEventListener(
+    'click',
+    () => {
+      if (!candidate) return;
+      const selectedField = field.value as (typeof PICKER_FIELDS)[number];
+      const captureMode = capture.value as PickerCaptureMode;
+      if (commitTarget(candidate, selectedField, captureMode)) {
+        exitRefineMode();
+        requiredElement<HTMLButtonElement>(shadow, '#pick').focus();
+      }
+    },
+  );
+  useMatchButton.addEventListener('click', () => {
+    const match = cycleMatches[cycleIndex];
+    if (!match) return;
+    const selectedField = field.value as (typeof PICKER_FIELDS)[number];
+    const captureMode = capture.value as PickerCaptureMode;
+    if (commitTarget(match, selectedField, captureMode)) {
+      exitRefineMode();
+      requiredElement<HTMLButtonElement>(shadow, '#pick').focus();
+    }
+  });
+  requiredElement<HTMLButtonElement>(shadow, '#refine-cancel').addEventListener(
+    'click',
+    () => {
+      exitRefineMode();
+      selecting = true;
+      setStatus(
+        `Select another visible element for ${field.value.replaceAll('_', ' ')}.`,
+      );
+    },
+  );
 
   requiredElement<HTMLButtonElement>(shadow, '#pick').addEventListener(
     'click',

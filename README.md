@@ -92,7 +92,7 @@ Individual checks (`format:check`, `lint`, `compile`, `test`, `build`) are also 
 
 ## Security & privacy boundaries
 
-- Manifest permissions are limited to `activeTab`, `scripting`, `storage`, and `sidePanel` — no host permissions, no `identity` permission, no OAuth.
+- Manifest permissions are limited to `activeTab`, `scripting`, `storage`, and `sidePanel` — no install-time host permissions, no `identity` permission, no OAuth. If the focused page was not the one that granted `activeTab`, the extension asks (on click) for optional `tabs` and that single page origin only.
 - Page content is only read when the user explicitly triggers capture; nothing runs automatically in the background against pages you haven't asked it to read.
 - Scraped values are rendered as text, never as HTML.
 - No remote code execution, no page-provided scripts are ever run.
