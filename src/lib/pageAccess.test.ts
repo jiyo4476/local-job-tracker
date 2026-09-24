@@ -54,6 +54,16 @@ describe('ensureFocusedPageAccess', () => {
     });
   });
 
+  it('fails when the focused tab changes while access is being checked', async () => {
+    browserMock.tabs.query
+      .mockResolvedValueOnce([{ id: 1, url: 'https://jobs.example.com/a' }])
+      .mockResolvedValueOnce([{ id: 2, url: 'https://other.example.com/b' }]);
+    browserMock.scripting.executeScript.mockResolvedValue([]);
+
+    const result = await ensureFocusedPageAccess();
+    expect(result.ok).toBe(false);
+  });
+
   it('reports a denial and rejects non-http pages', async () => {
     browserMock.scripting.executeScript.mockRejectedValue(new Error('denied'));
     browserMock.tabs.query.mockResolvedValue([

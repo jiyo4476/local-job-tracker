@@ -293,7 +293,7 @@ function startTemplatePicker(): void {
   }
 
   function onKeyDown(event: KeyboardEvent) {
-    if (!refinePanel.hidden) {
+    if (!refinePanel.hidden && !isEditableTarget(event)) {
       if (event.key === 'ArrowRight') {
         event.preventDefault();
         cycleTo(cycleIndex + 1);
@@ -453,6 +453,15 @@ function startTemplatePicker(): void {
   document.addEventListener('click', onPageClick, true);
   document.addEventListener('keydown', onKeyDown, true);
   requiredElement<HTMLElement>(shadow, '#picker-panel').focus();
+}
+
+function isEditableTarget(event: Event): boolean {
+  const origin = event.composedPath()[0];
+  return (
+    origin instanceof HTMLElement &&
+    (origin.isContentEditable ||
+      ['INPUT', 'TEXTAREA', 'SELECT'].includes(origin.tagName))
+  );
 }
 
 function requiredElement<T extends Element>(
