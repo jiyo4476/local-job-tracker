@@ -78,6 +78,58 @@ describe('template element picker utilities', () => {
     });
   });
 
+  it('builds selectors relative to the active item, skipping generated classes', () => {
+    const card = (active: boolean, title: string, company: string) => `
+      <li class="css-1ac2h1w eu4oa1w0">
+        <div class="cardOutline css-rhoekz eu4oa1w0${active ? ' vjs-highlight' : ''}">
+          <table><tbody><tr><td>
+            <h3 class="jobTitle css-1o1rnx9"><a class="jcs-JobTitle css-1baag51" href="/rc/clk?jk=1"><span>${title}</span></a></h3>
+            <span data-testid="company-name" class="css-19eicqx">${company}</span>
+          </td></tr></tbody></table>
+        </div>
+      </li>`;
+    document.body.innerHTML = `<ul class="css-pygyny">${card(true, 'IT Support', 'Zillow')}${card(false, 'Web Dev', 'Acme')}</ul>`;
+    const item = document.querySelector('div.cardOutline');
+    const title = document.querySelector('h3.jobTitle span');
+    const company = document.querySelector('[data-testid="company-name"]');
+    if (!item || !title || !company) throw new Error('fixture');
+
+    expect(buildStableSelector(company, item)).toBe(
+      'span[data-testid="company-name"]',
+    );
+    const titleSelector = buildStableSelector(title, item);
+    expect(titleSelector).toBe('a.jcs-JobTitle > span');
+    expect(titleSelector).not.toContain('css-');
+    expect(titleSelector).not.toContain('nth-of-type');
+
+    const other = document.querySelectorAll('div.cardOutline')[1];
+    expect(other?.querySelector(titleSelector)?.textContent).toBe('Web Dev');
+    expect(buildStableSelector(item.querySelector('h3') as Element, item)).toBe(
+      'h3.jobTitle',
+    );
+  });
+
+  it('keeps selectors inside the item when building link rules', () => {
+    document.body.innerHTML = `
+      <div class="cardOutline"><h3 class="jobTitle"><a class="jcs-JobTitle" href="/rc/clk?jk=1"><span>Apply</span></a></h3></div>
+      <div class="cardOutline"><h3 class="jobTitle"><a class="jcs-JobTitle" href="/rc/clk?jk=2"><span>Apply</span></a></h3></div>
+    `;
+    const item = document.querySelector('div.cardOutline');
+    const span = item?.querySelector('span');
+    if (!item || !span) throw new Error('fixture');
+    const rule = inferTemplateRule(
+      'job_link',
+      span,
+      buildStableSelector(span, item),
+      'link',
+      item,
+    );
+    expect(rule).toMatchObject({
+      selector: 'a.jcs-JobTitle',
+      attribute: 'href',
+    });
+  });
+
   it('lists a container plus its descendants tag names, deduped and sorted', () => {
     document.body.innerHTML = `
       <div id="card"><span>A</span><p><span>B</span></p><h1>Title</h1></div>

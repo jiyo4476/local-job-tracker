@@ -12,6 +12,7 @@ import {
   suggestPathPattern,
 } from '../src/lib/templates/picker';
 import { TEMPLATE_PICKER_BRIDGE_KEY } from '../src/lib/templates/pickerBridge';
+import { applyReplacement, URL_ATTRIBUTES } from '../src/lib/templates/replace';
 import {
   siteTemplateSchema,
   type SiteTemplateRule,
@@ -67,6 +68,9 @@ function startTemplatePicker(): void {
       <label>Active item class <input id="active-class" maxlength="100" placeholder="vjs-highlight" /></label>
       <label>Job field <select id="field"></select></label>
       <label>Capture <select id="capture"></select></label>
+      <p>Optional link fix: replace part of a scraped link URL, e.g. change /rc/clk to /viewjob. Only applies to link fields.</p>
+      <label>Link text to replace <input id="link-find" maxlength="200" placeholder="/rc/clk" /></label>
+      <label>Replace with <input id="link-replace" maxlength="200" placeholder="/viewjob" /></label>
       <div class="actions">
         <button id="pick" type="button" class="primary">Select page element</button>
         <button id="save" type="button">Save template</button>
@@ -203,21 +207,71 @@ function startTemplatePicker(): void {
       );
       return false;
     }
-    const selector = buildStableSelector(target);
+    const scope = readItemScope(target);
+    const selector = buildStableSelector(target, scope);
     if (!selector) {
       setStatus('Could not create a stable selector for that element.', true);
       return false;
     }
-    rules.set(
+    let rule = inferTemplateRule(
       selectedField,
-      inferTemplateRule(selectedField, target, selector, captureMode),
+      target,
+      selector,
+      captureMode,
+      scope,
     );
+    const find = requiredElement<HTMLInputElement>(
+      shadow,
+      '#link-find',
+    ).value.trim();
+    const replacement = requiredElement<HTMLInputElement>(
+      shadow,
+      '#link-replace',
+    ).value.trim();
+    const isLinkRule = (URL_ATTRIBUTES as readonly string[]).includes(
+      rule.attribute,
+    );
+    if (find && isLinkRule) rule = { ...rule, replace: { find, replacement } };
+    rules.set(selectedField, rule);
     renderRules();
-    const preview = previewText(target, captureMode);
+
+    let preview = previewText(target, captureMode);
+    let note = '';
+    const matched = scope.querySelector(rule.selector);
+    if (matched && isLinkRule) {
+      const raw = matched.getAttribute(rule.attribute) ?? '';
+      const fixed = applyReplacement(raw, rule.replace);
+      if (rule.replace && fixed === raw) {
+        note = ` “${find}” was not found in this link, so it was left unchanged.`;
+      }
+      try {
+        preview = new URL(fixed, location.href).toString().slice(0, 160);
+      } catch {
+        preview = fixed.slice(0, 160);
+      }
+    }
     setStatus(
-      `Mapped ${selectedField.replaceAll('_', ' ')}${preview ? `: “${preview}”` : ''}. Choose another field or save.`,
+      `Mapped ${selectedField.replaceAll('_', ' ')}${preview ? `: “${preview}”` : ''}.${note} Choose another field or save.`,
     );
     return true;
+  }
+
+  function readItemScope(target: Element): ParentNode {
+    const itemSelector = requiredElement<HTMLInputElement>(
+      shadow,
+      '#item-selector',
+    ).value.trim();
+    const activeClass = requiredElement<HTMLInputElement>(
+      shadow,
+      '#active-class',
+    ).value.trim();
+    if (!itemSelector || !activeClass) return document;
+    try {
+      const item = target.closest(itemSelector);
+      return item && item !== target ? item : document;
+    } catch {
+      return document;
+    }
   }
 
   function renderCycleStatus() {

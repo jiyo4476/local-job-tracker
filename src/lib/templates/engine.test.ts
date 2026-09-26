@@ -97,6 +97,55 @@ describe('site template engine', () => {
     });
   });
 
+  it('rewrites part of a scraped link before resolving it to an absolute URL', () => {
+    document.body.innerHTML = `
+      <h3 class="jobTitle"><a href="/rc/clk?jk=f184e914c41585c5&from=hp.jobsForYou&tk=abc">Apply</a></h3>
+    `;
+    const rule = {
+      field: 'job_link',
+      selector: 'h3.jobTitle a',
+      attribute: 'href',
+      transforms: ['absolute_url'],
+      replace: { find: '/rc/clk', replacement: '/viewjob' },
+    };
+    const result = executeSiteTemplate(
+      template({ rules: [rule] }),
+      document,
+      'https://www.indeed.com/jobs?q=it',
+      (element) => element.textContent?.trim() ?? '',
+    );
+    expect(result.values.job_link).toBe(
+      'https://www.indeed.com/viewjob?jk=f184e914c41585c5&from=hp.jobsForYou&tk=abc',
+    );
+  });
+
+  it('only allows replacements on link attributes that resolve through absolute_url', () => {
+    expect(() =>
+      template({
+        rules: [
+          {
+            field: 'job_title',
+            selector: 'h1',
+            replace: { find: 'a', replacement: 'b' },
+          },
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      template({
+        rules: [
+          {
+            field: 'job_link',
+            selector: 'a',
+            attribute: 'href',
+            transforms: ['trim'],
+            replace: { find: 'a', replacement: 'b' },
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
   it('normalizes enum-like fields through an explicit transform allowlist', () => {
     document.body.innerHTML = `
       <span class="type">Full time</span>
