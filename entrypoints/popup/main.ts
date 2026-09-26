@@ -36,6 +36,7 @@ import {
 import type { JobDraft, ScrapePayload } from '../../src/lib/schemas';
 import type { PopupDraftContext } from '../../src/lib/popupDraft';
 import { popupDraftPersistenceErrorMessage } from '../../src/lib/popupDraftFeedback';
+import { ensureFocusedPageAccess } from '../../src/lib/pageAccess';
 import {
   buildJobMarkdown,
   jobMarkdownFilename,
@@ -332,7 +333,7 @@ form?.addEventListener('input', () => {
 });
 
 extractButton?.addEventListener('click', () => {
-  void extractActiveTab();
+  void extractActiveTab({ interactive: true });
 });
 
 templateButton?.addEventListener('click', () => {
@@ -430,7 +431,9 @@ async function getActiveTabContext(): Promise<PopupDraftContext | undefined> {
   }
 }
 
-async function extractActiveTab(): Promise<
+async function extractActiveTab(
+  options: { interactive?: boolean } = {},
+): Promise<
   { applied_template?: { id: string; name: string } | undefined } | undefined
 > {
   clearFieldErrors();
@@ -439,6 +442,13 @@ async function extractActiveTab(): Promise<
   setBusy(true);
 
   try {
+    if (options.interactive) {
+      const access = await ensureFocusedPageAccess();
+      if (!access.ok) {
+        setStatus(access.message, 'alert');
+        return undefined;
+      }
+    }
     const rawResponse: unknown = await browser.runtime.sendMessage({
       type: 'EXTRACT_ACTIVE_TAB',
     });
@@ -461,6 +471,11 @@ async function extractActiveTab(): Promise<
 async function startTemplatePicker(): Promise<void> {
   setStatus('Starting the element picker…', 'status');
   try {
+    const access = await ensureFocusedPageAccess();
+    if (!access.ok) {
+      setStatus(access.message, 'alert');
+      return;
+    }
     const rawResponse: unknown = await browser.runtime.sendMessage({
       type: 'START_TEMPLATE_PICKER',
     });

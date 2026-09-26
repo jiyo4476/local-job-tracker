@@ -7,6 +7,8 @@ export default defineConfig({
       'Review and save visible job postings into your Local Job Tracker — no login, no server.',
     version: '0.1.0',
     permissions: ['activeTab', 'scripting', 'storage', 'sidePanel'],
+    optional_permissions: ['tabs'],
+    optional_host_permissions: ['http://*/*', 'https://*/*'],
     action: {
       default_title: 'Save job to Local Job Tracker',
     },
