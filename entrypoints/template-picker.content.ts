@@ -7,10 +7,12 @@ import {
   findByAttribute,
   inferTemplateRule,
   listDescendantTagNames,
+  listScopeTagNames,
   PICKER_CAPTURE_MODES,
   PICKER_FIELDS,
   type PickerCaptureMode,
   previewText,
+  queryAcross,
   suggestPathPattern,
 } from '../src/lib/templates/picker';
 import { TEMPLATE_PICKER_BRIDGE_KEY } from '../src/lib/templates/pickerBridge';
@@ -72,19 +74,23 @@ function startTemplatePicker(): void {
         <div class="field-row">
           <input id="list-selector" maxlength="500" placeholder="ul.job-list" />
           <button id="pick-list-selector" type="button">Select on page</button>
-          <button id="cycle-list-container" type="button">Cycle &lt;ul&gt; elements</button>
+          <button id="cycle-list-container" type="button">Cycle elements</button>
         </div>
       </label>
-      <div id="list-cycle-row" class="actions" hidden>
-        <button id="list-cycle-prev" type="button">◀ Prev</button>
-        <button id="list-cycle-next" type="button">Next ▶</button>
-        <button id="list-cycle-use" type="button" class="primary">Use this &lt;ul&gt;</button>
-        <button id="list-cycle-cancel" type="button">Cancel</button>
+      <div id="list-cycle-row" hidden>
+        <label id="list-cycle-label">Tag type <select id="list-cycle-tag"></select></label>
+        <div class="actions">
+          <button id="list-cycle-prev" type="button">◀ Prev</button>
+          <button id="list-cycle-next" type="button">Next ▶</button>
+          <button id="list-cycle-use" type="button" class="primary">Use this element</button>
+          <button id="list-cycle-cancel" type="button">Cancel</button>
+        </div>
       </div>
       <label>List item selector
         <div class="field-row">
           <input id="item-selector" maxlength="500" placeholder="li.job-card" />
           <button id="pick-item-selector" type="button">Select on page</button>
+          <button id="cycle-item-selector" type="button">Cycle elements</button>
         </div>
       </label>
       <label>Active item class <input id="active-class" maxlength="100" placeholder="vjs-highlight" /></label>
@@ -224,7 +230,14 @@ function startTemplatePicker(): void {
 
   let listCycleMatches: Element[] = [];
   let listCycleIndex = 0;
+  let listCycleField: 'list-selector' | 'item-selector' = 'list-selector';
+  let listCycleScopes: ParentNode[] = [document];
+  const FIELD_SELECTOR_OPTION = '__field__';
   const listCycleRow = requiredElement<HTMLElement>(shadow, '#list-cycle-row');
+  const listCycleTagSelect = requiredElement<HTMLSelectElement>(
+    shadow,
+    '#list-cycle-tag',
+  );
   const listCyclePrevButton = requiredElement<HTMLButtonElement>(
     shadow,
     '#list-cycle-prev',
@@ -257,16 +270,34 @@ function startTemplatePicker(): void {
     );
   }
 
-  function renderListCycleStatus() {
+  const listCycleInput = (fieldId: 'list-selector' | 'item-selector') =>
+    requiredElement<HTMLInputElement>(shadow, `#${fieldId}`);
+
+  function renderListCycleStatus(prefix = '') {
+    const kind = listCycleField === 'list-selector' ? 'container' : 'item';
     if (listCycleMatches.length === 0) {
-      setStatus('No <ul> elements found on this page.', true);
+      setStatus(`${prefix}No matches for that tag as a list ${kind}.`, true);
       return;
     }
     const element = listCycleMatches[listCycleIndex];
     const preview = element ? buildGenericSelector(element) : '';
     setStatus(
-      `<ul> ${String(listCycleIndex + 1)} of ${String(listCycleMatches.length)}${preview ? `: “${preview}”` : ''}.`,
+      `${prefix}List ${kind} ${String(listCycleIndex + 1)} of ${String(listCycleMatches.length)}${preview ? `: “${preview}”` : ''}.`,
     );
+  }
+
+  function refreshListCycleMatches(prefix = '') {
+    const choice = listCycleTagSelect.value;
+    const selector =
+      choice === FIELD_SELECTOR_OPTION
+        ? listCycleInput(listCycleField).value.trim()
+        : choice;
+    listCycleMatches = queryAcross(listCycleScopes, selector).filter(
+      (element) => element !== host,
+    );
+    listCycleIndex = 0;
+    setHighlight(listCycleMatches[0]);
+    renderListCycleStatus(prefix);
   }
 
   function listCycleTo(index: number) {
@@ -278,24 +309,69 @@ function startTemplatePicker(): void {
     renderListCycleStatus();
   }
 
-  function enterListCycleMode() {
+  function populateListCycleTags(
+    useFieldValue: boolean,
+    defaultTag: string,
+  ): boolean {
+    listCycleTagSelect.replaceChildren();
+    const typed = useFieldValue
+      ? listCycleInput(listCycleField).value.trim()
+      : '';
+    const typedMatches = typed
+      ? queryAcross(listCycleScopes, typed).filter((el) => el !== host)
+      : [];
+    if (typedMatches.length > 0) {
+      const option = document.createElement('option');
+      option.value = FIELD_SELECTOR_OPTION;
+      option.textContent = `Current selector: ${typed}`;
+      listCycleTagSelect.append(option);
+    }
+    const tags = listScopeTagNames(listCycleScopes);
+    for (const tag of tags) {
+      const option = document.createElement('option');
+      option.value = tag;
+      option.textContent = tag;
+      listCycleTagSelect.append(option);
+    }
+    if (typedMatches.length > 0) {
+      listCycleTagSelect.value = FIELD_SELECTOR_OPTION;
+    } else if (tags.includes(defaultTag)) {
+      listCycleTagSelect.value = defaultTag;
+    }
+    return typedMatches.length > 0 || tags.length > 0;
+  }
+
+  function enterListCycleMode(fieldId: 'list-selector' | 'item-selector') {
     selecting = false;
     pickingSelectorFor = null;
     if (!refinePanel.hidden) exitRefineMode();
-    listCycleMatches = [...document.querySelectorAll('ul')];
-    listCycleIndex = 0;
-    if (listCycleMatches.length === 0) {
-      setStatus('No <ul> elements found on this page.', true);
+    listCycleField = fieldId;
+    listCycleScopes = [document];
+    if (fieldId === 'item-selector') {
+      const containerSelector = listCycleInput('list-selector').value.trim();
+      const containers = containerSelector
+        ? queryAcross([document], containerSelector).filter(
+            (element) => element !== host,
+          )
+        : [];
+      if (containers.length > 0) listCycleScopes = containers;
+    }
+    if (
+      !populateListCycleTags(true, fieldId === 'list-selector' ? 'ul' : 'li')
+    ) {
+      exitListCycleMode();
+      setStatus('No elements found to cycle through.', true);
       return;
     }
     listCycleRow.hidden = false;
-    setHighlight(listCycleMatches[0]);
-    renderListCycleStatus();
+    refreshListCycleMatches();
   }
 
   function exitListCycleMode() {
     listCycleMatches = [];
     listCycleIndex = 0;
+    listCycleField = 'list-selector';
+    listCycleScopes = [document];
     listCycleRow.hidden = true;
     setHighlight(undefined);
   }
@@ -526,7 +602,7 @@ function startTemplatePicker(): void {
       setStatus('Selector pick cancelled.');
     } else if (!listCycleRow.hidden) {
       exitListCycleMode();
-      setStatus('List container cycling cancelled.');
+      setStatus('Element cycling cancelled.');
     } else if (!refinePanel.hidden) {
       exitRefineMode();
       setStatus('Refinement cancelled.');
@@ -604,7 +680,18 @@ function startTemplatePicker(): void {
   requiredElement<HTMLButtonElement>(
     shadow,
     '#cycle-list-container',
-  ).addEventListener('click', enterListCycleMode);
+  ).addEventListener('click', () => {
+    enterListCycleMode('list-selector');
+  });
+  requiredElement<HTMLButtonElement>(
+    shadow,
+    '#cycle-item-selector',
+  ).addEventListener('click', () => {
+    enterListCycleMode('item-selector');
+  });
+  listCycleTagSelect.addEventListener('change', () => {
+    refreshListCycleMatches();
+  });
   listCyclePrevButton.addEventListener('click', () => {
     listCycleTo(listCycleIndex - 1);
   });
@@ -615,17 +702,28 @@ function startTemplatePicker(): void {
     const element = listCycleMatches[listCycleIndex];
     if (!element) return;
     const selector = buildGenericSelector(element);
-    requiredElement<HTMLInputElement>(shadow, '#list-selector').value =
-      selector;
-    setStatus(`Set list container selector to “${selector}”.`);
+    listCycleInput(listCycleField).value = selector;
+    if (listCycleField === 'list-selector') {
+      const prefix = `Set list container selector to “${selector}”. Now cycle an element inside it for the list item selector. `;
+      listCycleField = 'item-selector';
+      listCycleScopes = [element];
+      if (populateListCycleTags(false, 'li')) {
+        refreshListCycleMatches(prefix);
+        return;
+      }
+      exitListCycleMode();
+      setStatus(`Set list container selector to “${selector}”.`);
+      return;
+    }
     exitListCycleMode();
+    setStatus(`Set list item selector to “${selector}”.`);
   });
   requiredElement<HTMLButtonElement>(
     shadow,
     '#list-cycle-cancel',
   ).addEventListener('click', () => {
     exitListCycleMode();
-    setStatus('List container cycling cancelled.');
+    setStatus('Element cycling cancelled.');
   });
   requiredElement<HTMLButtonElement>(shadow, '#testid-find').addEventListener(
     'click',

@@ -277,6 +277,45 @@ export function listDescendantTagNames(container: Element): string[] {
   return [...tags].sort();
 }
 
+const NON_CYCLABLE_TAGS = new Set([
+  'html',
+  'head',
+  'body',
+  'script',
+  'style',
+  'noscript',
+  'template',
+  'link',
+  'meta',
+  'title',
+  'br',
+]);
+
+export function listScopeTagNames(scopes: ParentNode[]): string[] {
+  const tags = new Set<string>();
+  for (const scope of scopes) {
+    for (const element of scope.querySelectorAll('*')) {
+      const tag = element.tagName.toLowerCase();
+      if (!NON_CYCLABLE_TAGS.has(tag) && !element.closest('svg')) tags.add(tag);
+    }
+  }
+  return [...tags].sort();
+}
+
+export function queryAcross(scopes: ParentNode[], selector: string): Element[] {
+  const found = new Set<Element>();
+  try {
+    for (const scope of scopes) {
+      for (const element of scope.querySelectorAll(selector)) {
+        found.add(element);
+      }
+    }
+  } catch {
+    return [];
+  }
+  return [...found];
+}
+
 export function previewText(
   element: Element,
   captureMode: PickerCaptureMode,

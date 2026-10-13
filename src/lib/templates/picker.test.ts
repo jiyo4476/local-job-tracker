@@ -7,7 +7,9 @@ import {
   findByAttribute,
   inferTemplateRule,
   listDescendantTagNames,
+  listScopeTagNames,
   previewText,
+  queryAcross,
   suggestPathPattern,
 } from './picker';
 
@@ -195,5 +197,26 @@ describe('template element picker utilities', () => {
     expect(buildGenericSelector(card)).toBe('div.cardOutline');
     expect(buildGenericSelector(list)).toBe('ul');
     expect(buildGenericSelector(item)).toBe('li');
+  });
+
+  it('lists cyclable tags in a scope, ignoring head content and svg internals', () => {
+    document.body.innerHTML = `
+      <ul id="list"><li><div class="card"><span>A</span><svg><path d=""/></svg></div></li></ul>
+      <script>1</script>
+    `;
+    const list = document.querySelector('#list');
+    if (!list) throw new Error('fixture');
+    expect(listScopeTagNames([list])).toEqual(['div', 'li', 'span']);
+    expect(listScopeTagNames([document])).toEqual(['div', 'li', 'span', 'ul']);
+  });
+
+  it('queries several scopes without duplicates and tolerates bad selectors', () => {
+    document.body.innerHTML =
+      '<div id="a"><li>1</li></div><div id="b"><li>2</li></div>';
+    const a = document.querySelector('#a');
+    const b = document.querySelector('#b');
+    if (!a || !b) throw new Error('fixture');
+    expect(queryAcross([a, b, document], 'li')).toHaveLength(2);
+    expect(queryAcross([document], '::bad(')).toEqual([]);
   });
 });
