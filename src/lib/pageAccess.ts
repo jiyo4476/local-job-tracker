@@ -61,7 +61,7 @@ async function resolveFocusedPageAccess(): Promise<ResolvedAccess> {
   } catch {
     return {
       ok: false,
-      message: `Permission for tab access was saved. Click again to allow access to ${origin}.`,
+      message: `Chrome needs a fresh click to ask for access to ${origin}. Click again to continue.`,
     };
   }
   if (!granted) {

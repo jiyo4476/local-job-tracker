@@ -404,10 +404,9 @@ function startTemplatePicker(): void {
       captureMode,
       scope,
     );
-    const find = requiredElement<HTMLInputElement>(
-      shadow,
-      '#link-find',
-    ).value.trim();
+    const find = linkFixRow.hidden
+      ? ''
+      : requiredElement<HTMLInputElement>(shadow, '#link-find').value.trim();
     const replacement = requiredElement<HTMLInputElement>(
       shadow,
       '#link-replace',
