@@ -55,7 +55,7 @@ No environment variables are required to build or run this extension — it make
 
 ## Security Boundaries
 
-- Use `activeTab` + user-triggered script execution for page reads. The manifest requests only `activeTab`, `scripting`, and `storage` — no host permissions, no `identity` permission (there is no OAuth flow to support).
+- Use `activeTab` + user-triggered script execution for page reads. The manifest requests only `activeTab`, `scripting`, `storage`, and `sidePanel` up front — no install-time host permissions, no `identity` permission (there is no OAuth flow to support). When the side panel outlives the tab that granted `activeTab`, `src/lib/pageAccess.ts` asks (from a user click) for the focused page only: optional `tabs` if its URL is hidden, then that single origin via `optional_host_permissions`. Never request broader origins.
 - Render scraped values as text, never as HTML.
 - Do not execute remote code or page-provided scripts.
 - Keep extension settings and stored job records out of logs unless redacted.

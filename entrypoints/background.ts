@@ -83,7 +83,7 @@ export async function handleMessage(
   message: ExtensionMessage,
 ): Promise<ExtensionResponse> {
   if (message.type === 'EXTRACT_ACTIVE_TAB') {
-    return extractActiveTab();
+    return extractActiveTab(message.tabId);
   }
 
   if (message.type === 'SAVE_JOB_LOCAL') {
@@ -121,7 +121,7 @@ export async function handleMessage(
   }
 
   if (message.type === 'START_TEMPLATE_PICKER') {
-    return startTemplatePicker();
+    return startTemplatePicker(message.tabId);
   }
 
   if (message.type === 'SAVE_SITE_TEMPLATE') {
@@ -142,8 +142,25 @@ export async function handleMessage(
   );
 }
 
-async function startTemplatePicker(): Promise<ExtensionResponse> {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+async function resolveTargetTab(
+  tabId: number | undefined,
+): Promise<chrome.tabs.Tab | undefined> {
+  if (tabId === undefined) {
+    const [tab] = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    return tab;
+  }
+  try {
+    return await browser.tabs.get(tabId);
+  } catch {
+    return undefined;
+  }
+}
+
+async function startTemplatePicker(tabId?: number): Promise<ExtensionResponse> {
+  const tab = await resolveTargetTab(tabId);
   if (!tab?.id || !tab.url) {
     return errorResponse('TAB_NOT_FOUND', 'No active web page is available.');
   }
@@ -315,8 +332,8 @@ function enqueuePopupDraftMutation(
   return next;
 }
 
-async function extractActiveTab(): Promise<ExtensionResponse> {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+async function extractActiveTab(tabId?: number): Promise<ExtensionResponse> {
+  const tab = await resolveTargetTab(tabId);
   if (!tab?.id) {
     return errorResponse('TAB_NOT_FOUND', 'No active tab is available.');
   }

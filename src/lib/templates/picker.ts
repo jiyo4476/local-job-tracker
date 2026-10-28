@@ -24,18 +24,21 @@ export function buildStableSelector(
   element: Element,
   root: ParentNode = document,
 ): string {
+  const scope = scopeRoot(element, root);
+  const tag = element.tagName.toLowerCase();
+
   const id = element.getAttribute('id');
   if (id && looksStableToken(id)) {
     const selector = `#${escapeIdentifier(id)}`;
-    if (isUnique(selector, element, root)) return selector;
+    if (isUnique(selector, element, scope)) return selector;
   }
 
   for (const attribute of STABLE_ATTRIBUTES) {
     const value = element.getAttribute(attribute);
     if (!value || value.length > 200 || !looksStableToken(value, true))
       continue;
-    const selector = `${element.tagName.toLowerCase()}[${attribute}="${escapeAttribute(value)}"]`;
-    if (isUnique(selector, element, root)) return selector;
+    const selector = `${tag}[${attribute}="${escapeAttribute(value)}"]`;
+    if (isUnique(selector, element, scope)) return selector;
   }
 
   const ariaLabel = element.getAttribute('aria-label');
@@ -44,36 +47,83 @@ export function buildStableSelector(
     ariaLabel.length <= 200 &&
     looksStableToken(ariaLabel, true)
   ) {
-    const selector = `${element.tagName.toLowerCase()}[aria-label="${escapeAttribute(ariaLabel)}"]`;
-    if (isUnique(selector, element, root)) return selector;
+    const selector = `${tag}[aria-label="${escapeAttribute(ariaLabel)}"]`;
+    if (isUnique(selector, element, scope)) return selector;
+  }
+
+  for (const className of stableClasses(element)) {
+    const selector = `${tag}.${className}`;
+    if (isUnique(selector, element, scope)) return selector;
   }
 
   const parts: string[] = [];
   let current: Element | null = element;
   while (
     current &&
+    current !== scope &&
     current.tagName.toLowerCase() !== 'html' &&
     parts.length < 8
   ) {
-    const tag = current.tagName.toLowerCase();
     const parent: Element | null = current.parentElement;
     if (!parent) {
-      parts.unshift(tag);
+      parts.unshift(current.tagName.toLowerCase());
       break;
     }
-    const siblings = [...parent.children].filter(
-      (sibling) => sibling.tagName === current?.tagName,
-    );
-    const part =
-      siblings.length <= 1
-        ? tag
-        : `${tag}:nth-of-type(${String(siblings.indexOf(current) + 1)})`;
-    parts.unshift(part);
+    parts.unshift(describeStep(current, parent));
     const selector = parts.join(' > ');
-    if (isUnique(selector, element, root)) return selector;
+    if (isUnique(selector, element, scope)) return selector;
     current = parent;
   }
   return parts.join(' > ');
+}
+
+function describeStep(current: Element, parent: Element): string {
+  const tag = current.tagName.toLowerCase();
+  const className = stableClasses(current)[0];
+  const base = className ? `${tag}.${className}` : tag;
+  const sameTag = [...parent.children].filter(
+    (sibling) => sibling.tagName === current.tagName,
+  );
+  if (sameTag.length <= 1) return base;
+  if (
+    className &&
+    sameTag.filter((sibling) => sibling.classList.contains(className))
+      .length === 1
+  ) {
+    return base;
+  }
+  return `${base}:nth-of-type(${String(sameTag.indexOf(current) + 1)})`;
+}
+
+// Unlike buildStableSelector, this is deliberately non-unique: list/item
+// selectors must match every repeated card on the page, not just the one
+// element that was clicked.
+export function buildGenericSelector(element: Element): string {
+  const tag = element.tagName.toLowerCase();
+  const classes = stableClasses(element);
+  return classes.length > 0 ? `${tag}.${classes.join('.')}` : tag;
+}
+
+function scopeRoot(element: Element, root: ParentNode): ParentNode {
+  return root instanceof Element && root !== element && root.contains(element)
+    ? root
+    : document;
+}
+
+function stableClasses(element: Element): string[] {
+  return [...element.classList].filter(looksStableClass);
+}
+
+// Framework-generated class names (css-1ac2h1w, eu4oa1w0, ...) rotate between
+// deploys, so only human-named classes are safe to persist in a template.
+function looksStableClass(token: string): boolean {
+  if (token.length > 60 || !/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(token)) {
+    return false;
+  }
+  if (/^(css|sc|jsx|styled)-/i.test(token)) return false;
+  return !token
+    .split(/[-_]/)
+    .some((segment) => /\d/.test(segment) && /^[a-z0-9]{5,}$/.test(segment));
 }
 
 export function inferTemplateRule(
@@ -81,6 +131,7 @@ export function inferTemplateRule(
   element: Element,
   selector: string,
   captureMode: PickerCaptureMode = 'text',
+  root: ParentNode = document,
 ): SiteTemplateRule {
   if (field === 'external_job_id' && element.hasAttribute('data-job-id')) {
     return {
@@ -104,7 +155,7 @@ export function inferTemplateRule(
     }
     return {
       field,
-      selector: link ? buildStableSelector(link) : selector,
+      selector: link ? buildStableSelector(link, root) : selector,
       attribute: linkAttribute(link),
       multiple: false,
       transforms: ['absolute_url'],
@@ -114,7 +165,7 @@ export function inferTemplateRule(
     const link = findLinkTarget(element);
     return {
       field,
-      selector: link ? buildStableSelector(link) : selector,
+      selector: link ? buildStableSelector(link, root) : selector,
       attribute: link ? linkAttribute(link) : 'href',
       multiple: false,
       transforms: ['absolute_url'],
@@ -124,7 +175,7 @@ export function inferTemplateRule(
     const link = findLinkTarget(element);
     return {
       field,
-      selector: link ? buildStableSelector(link) : selector,
+      selector: link ? buildStableSelector(link, root) : selector,
       attribute: 'text',
       multiple: false,
       transforms:
@@ -218,6 +269,69 @@ export function inferTemplateRule(
   };
 }
 
+export function listDescendantTagNames(container: Element): string[] {
+  const tags = new Set<string>([container.tagName.toLowerCase()]);
+  for (const descendant of container.querySelectorAll('*')) {
+    tags.add(descendant.tagName.toLowerCase());
+  }
+  return [...tags].sort();
+}
+
+const NON_CYCLABLE_TAGS = new Set([
+  'html',
+  'head',
+  'body',
+  'script',
+  'style',
+  'noscript',
+  'template',
+  'link',
+  'meta',
+  'title',
+  'br',
+]);
+
+export function listScopeTagNames(scopes: ParentNode[]): string[] {
+  const tags = new Set<string>();
+  for (const scope of scopes) {
+    for (const element of scope.querySelectorAll('*')) {
+      const tag = element.tagName.toLowerCase();
+      if (!NON_CYCLABLE_TAGS.has(tag) && !element.closest('svg')) tags.add(tag);
+    }
+  }
+  return [...tags].sort();
+}
+
+export function queryAcross(scopes: ParentNode[], selector: string): Element[] {
+  const found = new Set<Element>();
+  try {
+    for (const scope of scopes) {
+      for (const element of scope.querySelectorAll(selector)) {
+        found.add(element);
+      }
+    }
+  } catch {
+    return [];
+  }
+  return [...found];
+}
+
+export function previewText(
+  element: Element,
+  captureMode: PickerCaptureMode,
+): string {
+  const linkTarget = findLinkTarget(element);
+  const source =
+    captureMode === 'link'
+      ? (linkTarget?.getAttribute('href') ??
+        linkTarget?.getAttribute('formaction') ??
+        linkTarget?.getAttribute('data-href') ??
+        linkTarget?.getAttribute('data-url') ??
+        '')
+      : (linkTarget?.textContent ?? element.textContent ?? '');
+  return source.replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
 function findLinkTarget(element: Element): Element | null {
   return element.closest(
     'a[href], button[formaction], [data-href], [data-url]',
@@ -250,8 +364,22 @@ function escapeIdentifier(value: string): string {
     : value.replace(/(^-?\d)|[^a-zA-Z0-9_-]/g, (match) => `\\${match}`);
 }
 
-function escapeAttribute(value: string): string {
+export function escapeAttribute(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+export function findByAttribute(
+  attribute: string,
+  value: string,
+  root: ParentNode = document,
+): Element[] {
+  try {
+    return [
+      ...root.querySelectorAll(`[${attribute}="${escapeAttribute(value)}"]`),
+    ];
+  } catch {
+    return [];
+  }
 }
 
 function looksStableToken(value: string, allowSpaces = false): boolean {

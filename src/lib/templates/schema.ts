@@ -1,9 +1,11 @@
 import { z } from 'zod';
+import { URL_ATTRIBUTES } from './replace';
 
 export const MAX_SITE_TEMPLATES = 500;
 export const MAX_TEMPLATE_RULES = 40;
 export const MAX_SELECTOR_LENGTH = 500;
 export const MAX_ACTIVE_CLASS_LENGTH = 100;
+export const MAX_REPLACE_LENGTH = 200;
 
 export const templateFieldSchema = z.enum([
   'external_job_id',
@@ -74,9 +76,34 @@ export const siteTemplateRuleSchema = z
     attribute: templateAttributeSchema.default('text'),
     multiple: z.boolean().default(false),
     transforms: z.array(templateTransformSchema).max(8).default(['trim']),
+    replace: z
+      .object({
+        find: z.string().min(1).max(MAX_REPLACE_LENGTH),
+        replacement: z.string().max(MAX_REPLACE_LENGTH),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((rule, context) => {
+    if (rule.replace) {
+      const isUrlAttribute = (URL_ATTRIBUTES as readonly string[]).includes(
+        rule.attribute,
+      );
+      if (!isUrlAttribute) {
+        context.addIssue({
+          code: 'custom',
+          path: ['replace'],
+          message: 'Replacements are only supported on link URL attributes.',
+        });
+      } else if (!rule.transforms.includes('absolute_url')) {
+        context.addIssue({
+          code: 'custom',
+          path: ['transforms'],
+          message: 'Link replacements require the absolute_url transform.',
+        });
+      }
+    }
     if (rule.multiple && !collectionFields.has(rule.field)) {
       context.addIssue({
         code: 'custom',

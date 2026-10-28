@@ -1,5 +1,6 @@
 import { normalizePlainDate } from '../plainDate';
 import { jobDraftSchema, type JobDraft } from '../schemas';
+import { applyReplacement } from './replace';
 import { siteTemplateSchema, type SiteTemplate } from './schema';
 
 const MAX_RULE_MATCHES = 100;
@@ -177,6 +178,9 @@ function applyRule(
     rule.attribute === 'text'
       ? (element.textContent ?? '')
       : (element.getAttribute(rule.attribute) ?? '');
+  if (rule.replace && typeof value === 'string') {
+    value = applyReplacement(value, rule.replace);
+  }
 
   for (const transform of rule.transforms) {
     if (transform === 'safe_markdown') {
