@@ -442,15 +442,18 @@ async function extractActiveTab(
   setBusy(true);
 
   try {
+    let tabId: number | undefined;
     if (options.interactive) {
       const access = await ensureFocusedPageAccess();
       if (!access.ok) {
         setStatus(access.message, 'alert');
         return undefined;
       }
+      tabId = access.tabId;
     }
     const rawResponse: unknown = await browser.runtime.sendMessage({
       type: 'EXTRACT_ACTIVE_TAB',
+      ...(tabId === undefined ? {} : { tabId }),
     });
     const response = extensionResponseSchema.parse(rawResponse);
     renderResponse(response);
@@ -478,6 +481,7 @@ async function startTemplatePicker(): Promise<void> {
     }
     const rawResponse: unknown = await browser.runtime.sendMessage({
       type: 'START_TEMPLATE_PICKER',
+      tabId: access.tabId,
     });
     const response = extensionResponseSchema.parse(rawResponse);
     if (!response.ok) {

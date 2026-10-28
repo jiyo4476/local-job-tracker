@@ -1,8 +1,6 @@
 import { browser } from 'wxt/browser';
 
-export type PageAccessResult = { ok: true } | { ok: false; message: string };
-
-type ResolvedAccess =
+export type PageAccessResult =
   { ok: true; tabId: number } | { ok: false; message: string };
 
 async function canScript(tabId: number): Promise<boolean> {
@@ -20,7 +18,7 @@ async function canScript(tabId: number): Promise<boolean> {
 // Must be called from a user-gesture handler in an extension page. activeTab
 // only covers the tab focused when the toolbar icon was clicked, so a side
 // panel that stays open across tab switches has to ask for the focused page.
-async function resolveFocusedPageAccess(): Promise<ResolvedAccess> {
+export async function ensureFocusedPageAccess(): Promise<PageAccessResult> {
   const [initial] = await browser.tabs.query({
     active: true,
     currentWindow: true,
@@ -71,23 +69,4 @@ async function resolveFocusedPageAccess(): Promise<ResolvedAccess> {
     };
   }
   return { ok: true, tabId };
-}
-
-// The background re-queries the focused tab, so confirm the user did not
-// switch tabs while a check or permission prompt was pending.
-export async function ensureFocusedPageAccess(): Promise<PageAccessResult> {
-  const access = await resolveFocusedPageAccess();
-  if (!access.ok) return access;
-  const [current] = await browser.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
-  if (current?.id !== access.tabId) {
-    return {
-      ok: false,
-      message:
-        'The focused tab changed while access was being checked. Click again on the page you want to read.',
-    };
-  }
-  return { ok: true };
 }

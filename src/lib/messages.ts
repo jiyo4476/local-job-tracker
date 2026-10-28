@@ -26,6 +26,7 @@ export const extensionErrorSchema = z.object({
 
 export const extractActiveTabRequestSchema = z.object({
   type: z.literal('EXTRACT_ACTIVE_TAB'),
+  tabId: z.number().int().nonnegative().optional(),
 });
 
 export const saveJobRequestSchema = z.object({
@@ -60,6 +61,7 @@ export const clearPopupDraftRequestSchema = z.object({
 
 export const startTemplatePickerRequestSchema = z.object({
   type: z.literal('START_TEMPLATE_PICKER'),
+  tabId: z.number().int().nonnegative().optional(),
 });
 
 export const saveSiteTemplateRequestSchema = z.object({

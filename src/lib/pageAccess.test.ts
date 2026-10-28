@@ -21,7 +21,10 @@ describe('ensureFocusedPageAccess', () => {
     ]);
     browserMock.scripting.executeScript.mockResolvedValue([]);
 
-    await expect(ensureFocusedPageAccess()).resolves.toEqual({ ok: true });
+    await expect(ensureFocusedPageAccess()).resolves.toEqual({
+      ok: true,
+      tabId: 1,
+    });
     expect(browserMock.permissions.request).not.toHaveBeenCalled();
   });
 
@@ -32,7 +35,10 @@ describe('ensureFocusedPageAccess', () => {
     browserMock.scripting.executeScript.mockRejectedValue(new Error('denied'));
     browserMock.permissions.request.mockResolvedValue(true);
 
-    await expect(ensureFocusedPageAccess()).resolves.toEqual({ ok: true });
+    await expect(ensureFocusedPageAccess()).resolves.toEqual({
+      ok: true,
+      tabId: 1,
+    });
     expect(browserMock.permissions.request).toHaveBeenCalledWith({
       origins: ['https://jobs.example.com/*'],
     });
@@ -45,23 +51,16 @@ describe('ensureFocusedPageAccess', () => {
     browserMock.scripting.executeScript.mockRejectedValue(new Error('denied'));
     browserMock.permissions.request.mockResolvedValue(true);
 
-    await expect(ensureFocusedPageAccess()).resolves.toEqual({ ok: true });
+    await expect(ensureFocusedPageAccess()).resolves.toEqual({
+      ok: true,
+      tabId: 1,
+    });
     expect(browserMock.permissions.request).toHaveBeenNthCalledWith(1, {
       permissions: ['tabs'],
     });
     expect(browserMock.permissions.request).toHaveBeenNthCalledWith(2, {
       origins: ['https://jobs.example.com/*'],
     });
-  });
-
-  it('fails when the focused tab changes while access is being checked', async () => {
-    browserMock.tabs.query
-      .mockResolvedValueOnce([{ id: 1, url: 'https://jobs.example.com/a' }])
-      .mockResolvedValueOnce([{ id: 2, url: 'https://other.example.com/b' }]);
-    browserMock.scripting.executeScript.mockResolvedValue([]);
-
-    const result = await ensureFocusedPageAccess();
-    expect(result.ok).toBe(false);
   });
 
   it('reports a denial and rejects non-http pages', async () => {

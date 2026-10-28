@@ -292,6 +292,27 @@ describe('background save flow', () => {
     });
   });
 
+  it('targets the explicit tab id instead of re-querying the focused tab', async () => {
+    browserMock.tabs.get.mockResolvedValue({
+      id: 21,
+      url: 'https://careers.example.com/jobs/9',
+    });
+    browserMock.tabs.query.mockResolvedValue([
+      { id: 99, url: 'https://elsewhere.example.com/' },
+    ]);
+    browserMock.scripting.executeScript.mockResolvedValue([]);
+    const { handleMessage } = await import('../../entrypoints/background');
+
+    await expect(
+      handleMessage({ type: 'START_TEMPLATE_PICKER', tabId: 21 }),
+    ).resolves.toEqual({ type: 'START_TEMPLATE_PICKER_RESULT', ok: true });
+    expect(browserMock.scripting.executeScript).toHaveBeenNthCalledWith(1, {
+      target: { tabId: 21 },
+      files: ['/content-scripts/template-picker.js'],
+    });
+    expect(browserMock.tabs.query).not.toHaveBeenCalled();
+  });
+
   it('returns TAB_NOT_FOUND when no active tab is available', async () => {
     browserMock.tabs.query.mockResolvedValue([]);
     const { handleMessage } = await import('../../entrypoints/background');
