@@ -80,7 +80,7 @@ No environment variables are required to build or run this extension — it make
 
 ## Security Boundaries
 
-- Use `activeTab` + user-triggered script execution for page reads. The manifest requests only `activeTab`, `scripting`, and `storage` — no host permissions, no `identity` permission (there is no OAuth flow to support).
+- Use `activeTab` + user-triggered script execution for page reads. The manifest requests only `activeTab`, `scripting`, `storage`, and `sidePanel` (the toolbar action opens the side panel) — no host permissions, no `identity` permission (there is no OAuth flow to support).
 - Render scraped values as text, never as HTML.
 - Do not execute remote code or page-provided scripts.
 - Keep extension settings and stored job records out of logs unless redacted.
